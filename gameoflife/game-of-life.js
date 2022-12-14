@@ -6,8 +6,8 @@ function render(image) {
     alert("Unable to initialise WebGL"); 
     return; 
   }
-  canvas.width = gl.canvas.clientHeight;
-  canvas.height = gl.canvas.clientWidth;
+  canvas.width = image.width;
+  canvas.height = image.height;
 
   // initialise program
   const vertexShaderSource = VERTEX_SHADER;
@@ -17,7 +17,7 @@ function render(image) {
   // create position buffer
   const positionBuffer = gl.createBuffer(gl.ARRAY_BUFFER);
   gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-  setRectangle(gl, 0, 0, gl.canvas.width, gl.canvas.height);
+  setRectangle(gl, 0, 0, canvas.width, canvas.height);
 
   // texture coordinates
   const texCoordBuffer = gl.createBuffer();
@@ -39,15 +39,13 @@ function render(image) {
   const texCoordAttributeLocation = gl.getAttribLocation(program, "a_texCoord");
   
   const resolutionUniformLocation = gl.getUniformLocation(program, "u_resolution");
-  const updateCellsUniformLocation = gl.getUniformLocation(program, "u_updateCells");
   const textureSizeUniformLocation = gl.getUniformLocation(program, "u_textureSize");
+  const updateCellsUniformLocation = gl.getUniformLocation(program, "u_updateCells");
   
   //
   // render time
   //
   // set up canvas
-  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-  gl.clear(gl.COLOR_BUFFER_BIT);
   gl.useProgram(program);
 
   // position pointer
@@ -64,13 +62,13 @@ function render(image) {
   gl.uniform2f(textureSizeUniformLocation, image.width, image.height);
 
   // create framebuffers and textures
-  const originalImageTexture = newTexture(gl);
+  const originalImageTexture = createAndSetupTexture(gl);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image); // put image.png in the texture;
 
   const textures = [];
   const framebuffers = [];
   for (let i = 0; i < 2; ++i) {
-    let texture = newTexture(gl);
+    let texture = createAndSetupTexture(gl);
     textures.push(texture);
     gl.texImage2D(
       gl.TEXTURE_2D, 0, gl.RGBA, image.width, image.height, 0,
@@ -87,20 +85,26 @@ function render(image) {
   // draw
   //
   // start with original image
-  setFramebuffer(null, canvas.width, canvas.height);
   gl.bindTexture(gl.TEXTURE_2D, originalImageTexture);
+
+  setFramebuffer(null, canvas.width, canvas.height);
   gl.uniform1i(updateCellsUniformLocation, 0);
   gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-  const framesPerUpdate = 30;
+  const framesPerUpdate = 1;
   let frame = 1;
   let step = 0;
   requestAnimationFrame(animate);
 
   function animate() {
     if (frame % framesPerUpdate === 0) {
+      // update cells by drawing to a framebuffer
       update();
-      step ++;
+
+      // draw to canvas
+      setFramebuffer(null, canvas.width, canvas.height);
+      gl.uniform1i(updateCellsUniformLocation, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 
     frame ++;
@@ -116,10 +120,7 @@ function render(image) {
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     gl.bindTexture(gl.TEXTURE_2D, textures[step % 2]);
 
-    // draw to canvas
-    setFramebuffer(null, canvas.width, canvas.height);
-    gl.uniform1i(updateCellsUniformLocation, 0);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    step ++;
   }
 
   function setFramebuffer(fbo, width, height) {
@@ -173,7 +174,7 @@ function setRectangle(gl, x, y, width, height) {
     gl.STATIC_DRAW);
 }
 
-function newTexture(gl) {
+function createAndSetupTexture(gl) {
   let texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
 

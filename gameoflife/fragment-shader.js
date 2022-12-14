@@ -17,7 +17,7 @@ void main() {
   int neighbours = 0;
   for (int i = -1; i <= 1; i++) {
     for (int j = -1; j <= 1; j++) {
-      if (dot(texture2D(u_image, v_texCoord + onePixel * vec2(float(i), float(j))), vec4(1.0)) > 0.5) {
+      if (dot(texture2D(u_image, v_texCoord + onePixel * vec2(float(i), float(j))), vec4(1.0)) > 3.0) {
         neighbours ++;
       }
     }
@@ -34,6 +34,6 @@ void main() {
     }
   }
 
-  gl_FragColor = alive ? vec4(0.0, 1.0, 0.0, 1.0) : vec4(vec3(0.0), 0.0);
+  gl_FragColor = alive ? vec4(1.0, 1.0, 1.0, 1.0) : vec4(vec3(0.0), 1.0);
 }
 `
