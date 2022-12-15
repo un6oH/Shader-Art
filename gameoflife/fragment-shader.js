@@ -4,17 +4,25 @@ precision mediump float;
 uniform sampler2D u_image;
 uniform vec2 u_simSize;
 uniform bool u_updateCells;
+// uniform bool u_display;
+uniform bool u_background;
 
 varying vec2 v_texCoord;
 
 void main() {
-  vec2 onePixel = vec2(1.0, 1.0) / u_simSize;
+  if (u_background) {
+    gl_FragColor = vec4(vec3(0.0), 1.0);
+    return;
+  }
 
   if (!u_updateCells) {
     gl_FragColor = texture2D(u_image, v_texCoord);
     return;
   }
 
+  vec2 onePixel = vec2(1.0, 1.0) / u_simSize;
+
+  // game of life logic
   int neighbours = 0;
   for (int i = -1; i <= 1; i++) {
     for (int j = -1; j <= 1; j++) {

@@ -15,8 +15,8 @@ function render(image) {
   const program = createProgram(gl, vertexShaderSource, fragmentShaderSource);
 
   // app
-  const simWidth = 1024;
-  const simHeight = 1024;
+  const simWidth = 1000;
+  const simHeight = 1000;
   let translation = [0, 0];
   let scale = 1;
 
@@ -34,6 +34,7 @@ function render(image) {
   const canvasResolutionUniformLocation = gl.getUniformLocation(program, "u_canvasResolution");
   const updateCellsUniformLocation = gl.getUniformLocation(program, "u_updateCells");
   const displayUniformLocation = gl.getUniformLocation(program, "u_display");
+  const backgroundUniformLocation = gl.getUniformLocation(program, "u_background");
   
   //
   // render time
@@ -50,7 +51,6 @@ function render(image) {
   gl.enableVertexAttribArray(texCoordAttributeLocation);
   gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
   gl.vertexAttribPointer(texCoordAttributeLocation, 2, gl.FLOAT, false, 0, 0);
-
   
   // create framebuffers and textures
   const originalImageTexture = createAndSetupTexture(gl);
@@ -62,17 +62,19 @@ function render(image) {
     let texture = createAndSetupTexture(gl);
     textures.push(texture);
     gl.texImage2D(
-      gl.TEXTURE_2D, 0, gl.RGBA, image.width, image.height, 0,
+      gl.TEXTURE_2D, 0, gl.RGBA, simWidth, simHeight, 0,
       gl.RGBA, gl.UNSIGNED_BYTE, null);
       
-      let framebuffer = gl.createFramebuffer();
-      framebuffers.push(framebuffer);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-      
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-  }
+    let framebuffer = gl.createFramebuffer();
+    framebuffers.push(framebuffer);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
     
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+  }
+
+  // set resolution uniforms
   gl.uniform2f(simSizeUniformLocation, simWidth, simHeight);
+  gl.uniform2f(canvasResolutionUniformLocation, canvas.width, canvas.height);
 
   //
   // draw
@@ -81,19 +83,9 @@ function render(image) {
 
   loadSim();
 
-  // start with original image
+  // display original texture
   // draw();
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-  setRectangle(gl, 0, 0, canvas.width, canvas.height);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-  setRectangle(gl, 0, 0, 1, 1);
-
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  gl.uniform2f(canvasResolutionUniformLocation, canvas.width, canvas.height);
-  gl.viewport(0, 0, canvas.width, canvas.height);
-
-  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  
 
   // animation 
   const framesPerUpdate = 1;
@@ -115,20 +107,24 @@ function render(image) {
 
   // update the cells by applying the rule
   function loadSim() {
-    gl.clear();
+    gl.clear(gl.COLOR_BUFFER_BIT);
 
+    // framebuffer and draw type
     gl.bindTexture(gl.TEXTURE_2D, originalImageTexture);
+    setFramebuffer(null, canvas.width, canvas.height);
+    gl.uniform1i(updateCellsUniformLocation, 0);
+    gl.uniform1i(displayUniformLocation, 1);
 
+    // set background
+    setBackground(canvas.width, canvas.height);
+
+    // place image on top
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     setRectangle(gl, 0, 0, image.width, image.height);
-
     gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
     setRectangle(gl, 0, 0, 1, 1);
-
-    setFramebuffer(framebuffers[1], simWidth, simHeight);
     
-    gl.uniform1i(displayUniformLocation, 0);
-    gl.uniform1i(updateCellsUniformLocation, 0);
+
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
     gl.bindTexture(gl.TEXTURE_2D, textures[1]);
@@ -158,21 +154,36 @@ function render(image) {
 
   // display to canvas, with translation and scaling
   function draw() {
-    gl.clear();
-    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    
+    setFramebuffer(null, canvas.width, canvas.height);
+    gl.uniform1i(updateCellsUniformLocation, 0);
+    gl.uniform1i(displayUniformLocation, 1);
+
+    setBackground(canvas.width, canvas.height);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.setRectangle();
-
-    setFramebuffer(null, canvas.width, canvas.height); // todo: replace with standalone uniform and viewport settings
-    gl.uniform1i(updateCellsUniformLocation, 0);
+    setRectangle(gl, 0, 0, canvas.width, canvas.height);
+    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+    setRectangle(gl, 0, 0, 1, 1);
+    
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  function setBackground(width, height) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    setRectangle(gl, 0, 0, width, height);
+    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+    setRectangle(gl, 0, 0, 1, 1);
+
+    gl.uniform1i(backgroundUniformLocation, 1);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    gl.uniform1i(backgroundUniformLocation, 0);
   }
   
   // set framebuffer and viewport
   function setFramebuffer(fbo, width, height) { 
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-    gl.uniform2f(simSizeUniformLocation, width, height);
     gl.viewport(0, 0, width, height);
   }
 }
