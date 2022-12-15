@@ -14,10 +14,15 @@ function render(image) {
   const fragmentShaderSource = FRAGMENT_SHADER;
   const program = createProgram(gl, vertexShaderSource, fragmentShaderSource);
 
+  // app
+  const simWidth = 1024;
+  const simHeight = 1024;
+  
+
   // create position buffer
   const positionBuffer = gl.createBuffer(gl.ARRAY_BUFFER);
   gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-  setRectangle(gl, 0, 0, canvas.width, canvas.height);
+  setRectangle(gl, 0, 0, image.width, image.height);
 
   // texture coordinates
   const texCoordBuffer = gl.createBuffer();
