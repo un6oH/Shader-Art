@@ -18,7 +18,7 @@ function render(image) {
 
   // set texture size to input image size
   const textureWidth = image.width;
-  const textureHeight = image.width;
+  const textureHeight = image.height;
 
   // buffers
   const positionBuffer = gl.createBuffer(gl.ARRAY_BUFFER);
