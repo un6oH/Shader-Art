@@ -120,7 +120,7 @@ function render(image) {
   }
 
   function update() {
-    console.log("update()");
+    // console.log("update()");
 
     setFramebuffer(framebuffers[step % 2], textureWidth, textureHeight);
     gl.uniform1i(updateCellsUniformLocation, 1);
