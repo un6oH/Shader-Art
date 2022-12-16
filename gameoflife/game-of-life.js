@@ -149,6 +149,8 @@ function render(image) {
     gl.bindTexture(gl.TEXTURE_2D, textures[step % 2]);
 
     step ++;
+
+    // test
   }
 
   // display to canvas, with translation and scaling

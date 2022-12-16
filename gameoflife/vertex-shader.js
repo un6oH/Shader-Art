@@ -1,4 +1,3 @@
-
 const VERTEX_SHADER = `
 precision mediump float;
 
