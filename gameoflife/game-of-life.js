@@ -84,7 +84,7 @@ function render(image) {
   loadSim();
 
   // display original texture
-  // draw();
+  draw();
   
 
   // animation 
@@ -96,7 +96,7 @@ function render(image) {
     if (frame % framesPerUpdate === 0) {
       // update cells by drawing to a framebuffer
       update();
-
+      
       // draw to canvas
       draw();
     }
@@ -111,7 +111,7 @@ function render(image) {
 
     // framebuffer and draw type
     gl.bindTexture(gl.TEXTURE_2D, originalImageTexture);
-    setFramebuffer(null, canvas.width, canvas.height);
+    setFramebuffer(framebuffers[0], canvas.width, canvas.height);
     gl.uniform1i(updateCellsUniformLocation, 0);
     gl.uniform1i(displayUniformLocation, 1);
 
@@ -123,11 +123,10 @@ function render(image) {
     setRectangle(gl, 0, 0, image.width, image.height);
     gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
     setRectangle(gl, 0, 0, 1, 1);
-    
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    gl.bindTexture(gl.TEXTURE_2D, textures[1]);
+    // gl.bindTexture(gl.TEXTURE_2D, textures[0]);
 
     console.log("loadSim() image save loaded");
   }
@@ -159,8 +158,6 @@ function render(image) {
     setFramebuffer(null, canvas.width, canvas.height);
     gl.uniform1i(updateCellsUniformLocation, 0);
     gl.uniform1i(displayUniformLocation, 1);
-
-    setBackground(canvas.width, canvas.height);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     setRectangle(gl, 0, 0, canvas.width, canvas.height);
