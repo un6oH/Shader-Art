@@ -1,0 +1,3 @@
+const FRAGMENT_SHADER = `
+
+`;
