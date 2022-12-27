@@ -1,4 +1,9 @@
-function render(image) {
+const SET_FIELD = 0;
+const SET_INPUT = 1;
+const UPDATE = 2;
+const DISPLAY = 3;
+
+function render(images) {
   // initialise canvas
   const canvas = document.querySelector("#gl-canvas");
   const gl = canvas.getContext("webgl");
@@ -10,19 +15,23 @@ function render(image) {
   // set canvas size to client canvas size
   canvas.width = gl.canvas.clientWidth;
   canvas.height = gl.canvas.clientHeight;
-
-  // initialise program
-  const vertexShaderSource = VERTEX_SHADER;
-  const fragmentShaderSource = FRAGMENT_SHADER;
-  const program = createProgram(gl, vertexShaderSource, fragmentShaderSource);
-
+  
   // set texture size to input image size
   const textureWidth = image.width;
   const textureHeight = image.height;
   const wrapTexture = [isPowerOfTwo(textureWidth), isPowerOfTwo(textureHeight)];
   // const wrapTexture = [false, false];
+  
+  console.log("Simulating " + textureWidth + ", " + textureHeight + " grid, output to " + canvas.width + ", " + canvas.height + " canvas");
 
-  console.log("Simulating " + textureWidth + ", " + textureHeight + " grid, output to " + canvas.width + ", " + canvas.height + " canvas")
+  // initialise programs
+  const initialiseProgram = createProgram(gl, BUFFER_VERT, INITIALISE_FRAG);
+  const addSourceProgram = createProgram(gl, BUFFER_VERT, ADD_SOURCE);
+  const diffuseProgram = createProgram(gl, BUFFER_VERT, DIFFUSE_FRAG);
+  const advectProgram = createProgram(gl, BUFFER_VERT, ADVECT_FRAG);
+  const projectProgram = createProgram(gl, BUFFER_VERT, PROJECT_FRAG);
+  const displayProgram = createProgram(gl, CANVAS_VERT, DISPLAY_FRAG);
+
 
   // buffers
   const positionBuffer = gl.createBuffer(gl.ARRAY_BUFFER);
@@ -34,8 +43,8 @@ function render(image) {
   
   const canvasResolutionUniformLocation = gl.getUniformLocation(program, "u_canvasResolution");
   const textureResolutionUniformLocation = gl.getUniformLocation(program, "u_textureResolution");
-  const updateCellsUniformLocation = gl.getUniformLocation(program, "u_updateCells");
-  const displayUniformLocation = gl.getUniformLocation(program, "u_display");
+  const modeUniformLocation = gl.getUniformLocation(program, "u_mode");
+  const deltaTimeUniformLocation = gl.getUniformLocation(program, "u_deltaTime");
   
   //
   // render time
@@ -54,7 +63,7 @@ function render(image) {
   gl.vertexAttribPointer(texCoordAttributeLocation, 2, gl.FLOAT, false, 0, 0);
   
   // create framebuffers and textures
-  const originalImageTexture = createAndSetupTexture(gl);
+  const inputImageTexture = createAndSetupTexture(gl);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image); // put image.png in the texture;
   
   const textures = [];
@@ -89,10 +98,12 @@ function render(image) {
   draw();
 
   // animation 
-  const framesPerUpdate = 5;
+  const framesPerUpdate = 1;
   let frame = 1;
-  let step = 0;
-  requestAnimationFrame(animate);
+  let currentFrameBuffer = 1;
+  const deltaTime = 0.05;
+  gl.uniform1f(deltaTimeUniformLocation, deltaTime);
+  // requestAnimationFrame(animate);
   function animate() {
     if (frame % framesPerUpdate === 0) {
       // update cells by drawing to a framebuffer
@@ -102,56 +113,66 @@ function render(image) {
       draw();
     }
 
-    frame ++;
+    ++frame;
     requestAnimationFrame(animate);
   }
 
   // initialise texture with input image
   function initialise() {
-    setFramebuffer(framebuffers[1], textureWidth, textureHeight);
-    gl.bindTexture(gl.TEXTURE_2D, originalImageTexture);
-    gl.uniform1i(updateCellsUniformLocation, 0);
-    gl.uniform1i(displayUniformLocation, 0);
+    setFramebuffer(framebuffers[currentFrameBuffer], textureWidth, textureHeight);
+    gl.bindTexture(gl.TEXTURE_2D, inputImageTexture);
+    gl.uniform1i(modeUniformLocation, SET_FIELD);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     setRectangle(gl, 0, 0, image.width, image.height);
     gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-    setRectangle(gl, 0, 0, 1, 1);
+    setRectangle(gl, 0, 0, textureWidth, textureHeight);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    gl.bindTexture(gl.TEXTURE_2D, textures[1]);
+    // add input
+    gl.uniform1i(modeUniformLocation, SET_INPUT);
+    setInput();
+
+    gl.bindTexture(gl.TEXTURE_2D, textures[currentFrameBuffer]);
+    currentFrameBuffer = 0;
   }
 
   function update() {
     // console.log("update()");
-
-    setFramebuffer(framebuffers[step % 2], textureWidth, textureHeight);
-    gl.uniform1i(updateCellsUniformLocation, 1);
-    gl.uniform1i(displayUniformLocation, 0);
+    // draw previous state
+    setFramebuffer(framebuffers[currentFrameBuffer], textureWidth, textureHeight);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     setRectangle(gl, 0, 0, textureWidth, textureHeight);
     gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-    setRectangle(gl, 0, 0, 1, 1);
+    setRectangle(gl, 0, 0, textureWidth, textureHeight);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    gl.bindTexture(gl.TEXTURE_2D, textures[step % 2]);
+    // add force and source input
+    gl.uniform1i(modeUniformLocation, SET_INPUT);
+    setInput();
 
-    step ++;
+    gl.bindTexture(gl.TEXTURE_2D, textures[currentFrameBuffer]);
+
+    switchFrameBuffer();
+  }
+
+  function switchFrameBuffer () {
+    currentFrameBuffer = currentFrameBuffer == 0 ? 1 : 0;
+    setFramebuffer(framebuffers[currentFrameBuffer], textureWidth, textureHeight);
   }
 
   // display to canvas
   function draw() {
     setFramebuffer(null, canvas.width, canvas.height);
-    gl.uniform1i(updateCellsUniformLocation, 0);
-    gl.uniform1i(displayUniformLocation, 1);
+    gl.uniform1i(modeUniformLocation, DISPLAY);
     
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     setRectangle(gl, 0, 0, canvas.width, canvas.height);
     gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-    setRectangle(gl, 0, 0, 1, 1);
+    setRectangle(gl, 0, 0, textureWidth, textureHeight);
     
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
@@ -161,6 +182,18 @@ function render(image) {
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.viewport(0, 0, width, height);
     gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
+  function setInput() {
+
+  }
+
+  function addForce(x, y, width, height, dx, dy) {
+
+  }
+
+  function addSource(x, y, width, height, d) {
+
   }
 }
 
@@ -229,12 +262,37 @@ function isPowerOfTwo(n) {
   return true;
 }
 
-function main() {
-  const image = new Image();
-  image.src = "../image.png";
-  image.onload = () => {
-    render(image);
+function loadImage(url, callback) {
+  let image = new Image();
+  image.src = url;
+  image.onload = callback;
+  return image;
+}
+
+function loadImages(urls, callback) {
+  let images = [];
+  let imagesToLoad = urls.length;
+
+  const onImageLoad = () => {
+    --imagesToLoad;
+
+    if (imagesToLoad == 0) {
+      callback(images);
+    }
   }
+
+  for (let i = 0; i < imagesToLoad; ++i) {
+    let image = loadImage(urls[i], onImageLoad);
+    images.push(image);
+  }
+}
+
+function main() {
+  loadImages([
+    "../fluidsim/initial-density.png",
+    "../fluidsim/initial-velocity.png",
+    "../fluidsim/boundaries",
+  ], render);
 }
 
 main();
