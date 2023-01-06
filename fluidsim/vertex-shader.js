@@ -1,4 +1,6 @@
 const BUFFER_VERT = `
+precision highp float;
+
 attribute vec2 a_position;
 
 uniform vec2 u_textureResolution;
@@ -15,6 +17,8 @@ void main() {
 `
 
 const CANVAS_VERT = `
+precision highp float;
+
 attribute vec2 a_position;
 
 uniform vec2 u_canvasResolution;
