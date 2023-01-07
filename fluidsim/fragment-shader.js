@@ -1,6 +1,6 @@
 const ADD_SOURCE_FRAG = `
-#define REAL(x) tan(3.14159265359 * ((x) - 0.5))
-#define CLAMP(x) atan(x) / 3.14159265359 + 0.5
+#define REAL(x) tan(3.14159265359 * ((x) - 0.498039215686))
+#define CLAMP(x) atan(x) / 3.14159265359 + 0.498039215686
 precision highp float;
 
 uniform vec2 u_textureResolution;
@@ -12,19 +12,17 @@ varying vec2 v_texCoord;
 
 void main() {
   vec2 texCoord = v_texCoord / u_textureResolution;
-  vec3 field = texture2D(u_field, texCoord).xyz;
-  vec3 source = texture2D(u_source, texCoord).xyz;
-  vec3 f_real = vec3(REAL(field.x), REAL(field.y), REAL(field.z));
-  vec3 s_real = vec3(REAL(source.x), REAL(source.y), REAL(source.z));
-  f_real += s_real * u_deltaTime;
+  vec3 field = REAL(texture2D(u_field, texCoord).xyz);
+  vec3 source = REAL(texture2D(u_source, texCoord).xyz);
+  field += source * u_deltaTime;
 
-  gl_FragColor = vec4(CLAMP(f_real), 1.0);
+  gl_FragColor = vec4(CLAMP(field), 1.0);
 }
 `;
 
 const DIFFUSE_FRAG = `
-#define REAL(x) tan(3.14159265359 * ((x) - 0.5))
-#define CLAMP(x) atan(x) / 3.14159265359 + 0.5
+#define REAL(x) tan(3.14159265359 * ((x) - 0.498039215686))
+#define CLAMP(x) atan(x) / 3.14159265359 + 0.498039215686
 precision highp float;
 
 uniform vec2 u_textureResolution; // constant
@@ -90,8 +88,8 @@ void main() {
 `
 
 const ADVECT_FRAG = `
-#define REAL(x) tan(3.14159265359 * ((x) - 0.5))
-#define CLAMP(x) atan(x) / 3.14159265359 + 0.5
+#define REAL(x) tan(3.14159265359 * ((x) - 0.498039215686))
+#define CLAMP(x) atan(x) / 3.14159265359 + 0.498039215686
 precision highp float;
 
 uniform vec2 u_textureResolution;
@@ -105,21 +103,21 @@ void main() {
   vec2 onePixel = 1.0 / u_textureResolution;
   vec2 texCoord = v_texCoord * onePixel;
   vec3 field = texture2D(u_field, texCoord).xyz;
-  if (texCoord.x == 0. || texCoord.x == 1. - onePixel.x || texCoord.y == 0. || texCoord.y == 1. - onePixel.y) {
-    gl_FragColor = vec4(field, 1.0);
-    return;
-  }
+  // if (texCoord.x == 0. || texCoord.x == 1. - onePixel.x || texCoord.y == 0. || texCoord.y == 1. - onePixel.y) {
+  //   gl_FragColor = vec4(field, 1.0);
+  //   return;
+  // }
 
   float dt0 = u_deltaTime * sqrt(u_textureResolution.x * u_textureResolution.y);
 
   vec2 vel = REAL(field.xy);
-  vec2 pos = v_texCoord - (dt0 * vel); // position of 'particle' in previous time step
+  vec2 pos = v_texCoord - 0.5 - dt0*vel; // position of 'particle' in previous time step
   vec2 pos0 = floor(pos);
   vec2 pos1 = pos0 + 1.0;
-  float s1 = pos1.x - pos.x; 
-  float s0 = 1.0 - s1;
-  float t1 = pos1.y - pos.y;
-  float t0 = 1.0 - t1;
+  float s0 = pos1.x - pos.x; 
+  float s1 = 1.0 - s0;
+  float t0 = pos1.y - pos.y;
+  float t1 = 1.0 - t0;
 
   vec2 coord00 = vec2(pos0.x + 0.5, pos0.y + 0.5) * onePixel;
   vec2 coord01 = vec2(pos0.x + 0.5, pos1.y + 0.5) * onePixel;
@@ -132,9 +130,7 @@ void main() {
     vec2 v10 = REAL(texture2D(u_field, coord10).xy); 
     vec2 v11 = REAL(texture2D(u_field, coord11).xy); 
 
-    vec2 v;
-    v.x = s0*t0*v00.x + s0*t1*v01.x + s1*t0*v10.x + s1*t1*v11.x;
-    v.y = s0*t0*v00.y + s0*t1*v01.y + s1*t0*v10.y + s1*t1*v11.y;
+    vec2 v = s0*t0*v00 + s0*t1*v01 + s1*t0*v10 + s1*t1*v11;
     gl_FragColor = vec4(CLAMP(v), field.z, 1.0);
   } else {
     float d00 = REAL(texture2D(u_field, coord00).z);
@@ -152,8 +148,8 @@ void main() {
 // project
 //
 const CALC_DIV_FIELD_FRAG = `
-#define REAL(x) tan(3.14159265359 * ((x) - 0.5))
-#define CLAMP(x) atan(x) / 3.14159265359 + 0.5
+#define REAL(x) tan(3.14159265359 * ((x) - 0.498039215686))
+#define CLAMP(x) atan(x) / 3.14159265359 + 0.498039215686
 precision highp float;
 
 uniform vec2 u_textureResolution; // constant
@@ -182,8 +178,8 @@ void main() {
 `
 
 const CALC_GRADIENT_FIELD_FRAG = `
-#define REAL(x) tan(3.14159265359 * ((x) - 0.5))
-#define CLAMP(x) atan(x) / 3.14159265359 + 0.5
+#define REAL(x) tan(3.14159265359 * ((x) - 0.498039215686))
+#define CLAMP(x) atan(x) / 3.14159265359 + 0.498039215686
 precision highp float;
 
 uniform vec2 u_textureResolution;
@@ -213,8 +209,8 @@ void main() {
 `
 
 const CALC_MASS_CONSERVING_FIELD_FRAG = `
-#define REAL(x) tan(3.14159265359 * ((x) - 0.5))
-#define CLAMP(x) atan(x) / 3.14159265359 + 0.5
+#define REAL(x) tan(3.14159265359 * ((x) - 0.498039215686))
+#define CLAMP(x) atan(x) / 3.14159265359 + 0.498039215686
 precision highp float;
 
 uniform vec2 u_textureResolution;
@@ -247,8 +243,8 @@ void main() {
 `
 
 const SET_BOUNDARIES_FRAG = `
-#define REAL(x) tan(3.14159265359 * ((x) - 0.5))
-#define CLAMP(x) atan(x) / 3.14159265359 + 0.5
+#define REAL(x) tan(3.14159265359 * ((x) - 0.498039215686))
+#define CLAMP(x) atan(x) / 3.14159265359 + 0.498039215686
 precision highp float;
 
 uniform vec2 u_textureResolution;
@@ -315,8 +311,8 @@ void main() {
 `
 
 const DISPLAY_FRAG = `
-// #define REAL(x) tan(3.14159265359 * ((x) - 0.5))
-// #define CLAMP(x) atan(x) / 3.14159265359 + 0.5
+// #define REAL(x) tan(3.14159265359 * ((x) - 0.498039215686))
+// #define CLAMP(x) atan(x) / 3.14159265359 + 0.498039215686
 precision highp float;
 
 uniform sampler2D u_field;
@@ -329,6 +325,6 @@ void main() {
   // gl_FragColor = vec4(vec3(d), 1.0);
   vec3 field = texture2D(u_field, v_texCoord).xyz;
   float b = texture2D(u_boundaries, v_texCoord).a;
-  gl_FragColor = vec4(field, 1.0);
+  gl_FragColor = vec4(vec3(field), 1.0);
 }
 `;

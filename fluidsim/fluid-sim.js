@@ -35,9 +35,9 @@ function render(images) {
   //
   // simulation parameters
   //
-  const diffusionRate = 20.0;
-  const viscosity = 5.0;
-  const deltaTime = 1 / 60;
+  const diffusionRate = 1.0;
+  const viscosity = 1.0;
+  const deltaTime = 1 / 20;
   const RELAXATION_STEPS = 40;
   
   // create field
@@ -297,7 +297,7 @@ function render(images) {
       
       setFramebuffer(fieldFramebuffers[fieldStep % 2], textureWidth, textureHeight);
       gl.uniform1i(diffuseDataLocations.fieldType, fieldType);
-      gl.uniform1f(diffuseDataLocations.diffusionRate, fieldType ? viscosity : diffusionRate);
+      gl.uniform1f(diffuseDataLocations.diffusionRate, fieldType == 0 ? viscosity : diffusionRate);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       
       setBoundaries(fieldTextures[fieldStep % 2], fieldFramebuffers[(fieldStep + 1) % 2], fieldType); ++fieldStep;
@@ -414,7 +414,7 @@ function render(images) {
   display();
   
   // step by step simulation
-  canvas.addEventListener("click", clickUpdate);
+  // canvas.addEventListener("click", clickUpdate);
   
   // animation
   const framesPerUpdate = 1;
@@ -422,7 +422,7 @@ function render(images) {
   let playAnimation = false;
 
   // continuous animation
-  // canvas.addEventListener("click", playPause);
+  canvas.addEventListener("click", playPause);
   function playPause() {
     if (!playAnimation) {
       console.log("simulation started");
@@ -435,24 +435,23 @@ function render(images) {
   }
 
   function update() {
-    if (!playAnimation) {
-      return;
-    }
+    if (!playAnimation) { return; }
+
     if (frame % framesPerUpdate == 0) {
       console.log("update()");
       // add sources and forces
       addSource();
-
+  
       // velocity step
-      // diffuse(VELOCITY_FIELD);
-      // project();
+      diffuse(VELOCITY_FIELD);
+      project();
       advect(VELOCITY_FIELD);
-      // project();
-
+      project();
+  
       // density step
       diffuse(DENSITY_FIELD);
       advect(DENSITY_FIELD);
-
+  
       // draw to canvas
       display();
     }
@@ -464,11 +463,6 @@ function render(images) {
     () => { 
       addSource();
       console.log("add source");
-      display();
-    }, 
-    () => {
-      console.log("advect velocity");
-      advect(VELOCITY_FIELD);
       display();
     }, 
     () => {
