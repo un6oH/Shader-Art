@@ -24,7 +24,7 @@ void main() {
 
   if (u_inputMode == 0) {
     vec3 source = REAL(texture2D(u_source, v_texCoord).xyz);
-    field += source * u_deltaTime;
+    field += source * 10.0 * u_deltaTime;
   } else {
     float distance = distance(texCoordi, u_mousePos);
     float weight = 1.0 - smoothstep(0.0, u_splatRadius, distance);
@@ -62,7 +62,7 @@ void main() {
 
   vec3 field0 = texture2D(u_field0, v_texCoord).xyz;
 
-  float a = u_deltaTime * u_diffusionRate;
+  float a = u_deltaTime * u_diffusionRate * u_textureResolution.x * u_textureResolution.y;
 
   if (!u_fieldType) {
     vec2 v_l = texture2D(u_field, v_texCoord_l).xy;
@@ -122,7 +122,7 @@ void main() {
 
   vec2 texCoord = v_texCoord * u_textureResolution;
   vec2 vel = field.xy;
-  vec2 pos = texCoord - 0.5 - dt0*vel; // position of 'particle' in previous time step
+  vec2 pos = texCoord + 0.5 - dt0*vel; // position of 'particle' in previous time step
   vec2 pos0 = floor(pos);
   vec2 pos1 = pos0 + 1.0;
   float s0 = pos1.x - pos.x; 
@@ -196,6 +196,7 @@ precision highp float;
 uniform vec2 u_textureResolution;
 uniform sampler2D u_gradientField;
 uniform sampler2D u_divField;
+uniform float u_overRelaxation;
 
 varying vec2 v_texCoord;
 varying vec2 v_texCoord_l;
@@ -218,7 +219,7 @@ void main() {
   float p_t = texture2D(u_gradientField, v_texCoord_t).z;
   float p_b = texture2D(u_gradientField, v_texCoord_b).z;
 
-  p = (div + p_l + p_r + p_t + p_b) / 4.01;
+  p = (div + p_l + p_r + p_t + p_b) / (4.0 + u_overRelaxation);
   gl_FragColor = vec4(0., 0., p, 1.0);
 }
 `
@@ -294,18 +295,20 @@ void main() {
   if (u_boundaryType == 0) { // velocity; zero xy
     vec2 avgVel;
     float b[size];
+    float weight = 0.01;
     float x = -1.0;
     float y = -1.0;
     for (int i = 0; i < 9; i++) {
       vec2 coord = v_texCoord + vec2(x, y) * onePixel;
       b[i] = texture2D(u_boundaries, coord).a;
+      weight += (1.0 - b[i]);
       avgVel += texture2D(u_field, coord).xy * (1.0 - b[i]);
       x = x == 1.0 ? -1.0 : x + 1.0;
       if (x == -1.0) {
         y += 1.0;
       }
     }
-    avgVel = avgVel / 9.0;
+    avgVel = avgVel / weight;
 
     vec2 normal;
     normal += normalize(vec2(1.0, -1.0)) * (b[6] - b[2]);
@@ -381,11 +384,13 @@ void main() {
   float p = d * acc; 
 
   vec4 hsla;
-  hsla.x = p * 50.0;
-  hsla.y = CLAMP(acc * 10.0) * 2.0 - 1.0;
-  hsla.z = 1.0;
+  hsla.x = 0.0;
+  hsla.y = 0.0;
+  hsla.z = d;
   hsla.a = 1.0;
-  // gl_FragColor = hsla2rgba(hsla) * vec4(vec3(1.0 - b), 1.0);
-  gl_FragColor = vec4(CLAMP(field) * (1.0 - b), 1.0);
+  gl_FragColor = hsla2rgba(hsla);
+  vec3 f_clamp = vec3(CLAMP(field)).xyz;
+  // f_clamp.z = f_clamp.z * 2.0 - 1.0;
+  // gl_FragColor = vec4(f_clamp * (1.0 - b), 1.0);
 }
 `;

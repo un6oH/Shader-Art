@@ -43,12 +43,13 @@ function render(images) {
   // simulation parameters
   //
   const diffusionRate = Math.pow(10, 0);
-  const viscosity = Math.pow(10, -2);
-  const deltaTime = 1 / 60;
-  const splatDensity = 10;
+  const viscosity = Math.pow(10, 0);
+  const overRelaxation = 0.00;
+  const deltaTime = 1 / 120;
+  const splatDensity = 120;
   const splatRadius = 10;
 
-  const RELAXATION_STEPS = 60;
+  const RELAXATION_STEPS = 20;
   
   // create field
   const sourceTexture = createAndSetupTexture(gl);
@@ -208,11 +209,13 @@ function render(images) {
     textureResolution: gl.getUniformLocation(calcGradientFieldProgram, "u_textureResolution"), 
     gradientField: gl.getUniformLocation(calcGradientFieldProgram, "u_gradientField"), 
     divField: gl.getUniformLocation(calcGradientFieldProgram, "u_divField"), 
+    overRelaxation: gl.getUniformLocation(calcGradientFieldProgram, "u_overRelaxation"), 
   };
   gl.useProgram(calcGradientFieldProgram);
   gl.uniform2f(calcGradientFieldDataLocations.textureResolution, textureWidth, textureHeight);
   gl.uniform1i(calcGradientFieldDataLocations.gradientField, 0);
   gl.uniform1i(calcGradientFieldDataLocations.divField, 1);
+  gl.uniform1f(calcGradientFieldDataLocations.overRelaxation, overRelaxation);
   const pFieldTextures = [];
   const pFieldFramebuffers = [];
   for (let i = 0; i < 2; ++i) {
@@ -298,7 +301,6 @@ function render(images) {
       let y0 = pmouseY / canvas.clientHeight * textureHeight;
       gl.uniform2f(addSourceDataLocations.mousePos, x, y);
       gl.uniform2f(addSourceDataLocations.mouseVel, (x - x0) / deltaTime, (y - y0) / deltaTime);
-      console.log("Mouse at " + x + ',' + y);
     }
 
     gl.uniform1i(addSourceDataLocations.inputMode, inputMode);
@@ -500,10 +502,10 @@ function render(images) {
   document.addEventListener('mousemove', (event) => {
     mouseX = event.clientX;
     mouseY = event.clientY;
+    if (event.buttons != 0) {
+      mouseInput = true;
+    }
   });
-
-  document.addEventListener('mousedown', () => { mouseInput = true; });
-  document.addEventListener('mouseup', () => { mouseInput = false; });
 
   function update() {
     if (!playAnimation) { return; }
@@ -515,13 +517,14 @@ function render(images) {
       addSource(1, mouseX, mouseY, pmouseX, pmouseY);
       pmouseX = mouseX;
       pmouseY = mouseY;
+      mouseInput = false;
     }
 
     // velocity step
-    // diffuse(VELOCITY_FIELD);
+    diffuse(VELOCITY_FIELD);
     project();
     advect(VELOCITY_FIELD);
-    // project();
+    project();
 
     // density step
     diffuse(DENSITY_FIELD);
