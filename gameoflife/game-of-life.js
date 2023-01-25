@@ -88,7 +88,7 @@ function render(image) {
   draw();
 
   // animation 
-  const framesPerUpdate = 5;
+  const framesPerUpdate = 1;
   let frame = 1;
   let step = 0;
   requestAnimationFrame(animate);
