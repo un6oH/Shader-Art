@@ -10,18 +10,63 @@ function main() {
   gl.getExtension('EXT_float_blend');
   gl.getExtension('OES_texture_float_linear');
 
-  // set canvas size to client canvas size
-  canvas.width = gl.canvas.clientWidth;
-  canvas.height = gl.canvas.clientHeight;
+  /** parameters */
+  const params = {
+    n: 100, 
+    maxAcc: 10, 
+    minSpeed: 20, 
+    maxSpeed: 40, 
+    separationF: 1, 
+    alignmentF: 0.5, 
+    cohesionF: 0.5, 
+    aoiRadius: 50, 
+    boidSize: 10, 
+  };
 
-  console.log("drawing to " + canvas.width + "," + canvas.height + " canvas");
+  const resetButton = document.querySelector("#reset");
 
-  const aoiTextureWidth = 200;
+  const inputs = {
+    n: document.querySelector("#n"),
+    maxAcc: document.querySelector("#maxAcc"),
+    minSpeed: document.querySelector("#minSpeed"),
+    maxSpeed: document.querySelector("#maxSpeed"),
+    separationF: document.querySelector("#separationF"),
+    alignmentF: document.querySelector("#alignmentF"),
+    cohesionF: document.querySelector("#cohesionF"),
+    aoiRadius: document.querySelector("#aoiRadius"),
+  };
+
+  const outputs = {
+    separationF: document.querySelector("#separationFValue"), 
+    alignmentF: document.querySelector("#alignmentFValue"), 
+    cohesionF: document.querySelector("#cohesionFValue"), 
+  };
+
+  ["separationF", "alignmentF", "cohesionF"].forEach((id) => {
+    outputs[id].textContent = inputs[id].value;
+    inputs[id].addEventListener("input", (event) => {
+      outputs[id].textContent = event.target.value;
+    });
+  })
+
+  resetButton.addEventListener("click", () => setSimulation());
+
+  function setParams() {
+    for (let input in inputs) {
+      params[input] = parseFloat(inputs[input].value);
+    }
+    console.log("setParams()")
+    console.log(params);
+  }
+  setParams();
+
+  // constants
+  const aoiTextureWidth = 400;
   const aoiTextureHeight = Math.floor(aoiTextureWidth * canvas.height / canvas.width);
 
   /** initialise programs */
   // update velocity program
-  console.log("Creating update velocity program");
+  console.log("Creating update position program");
   const updatePositionProgram = createProgram(gl, UPDATE_POSITION_VS, UPDATE_POSITION_FS, ["newVelocity", "newPosition"]);
   gl.useProgram(updatePositionProgram);
   const updatePositionLocations = {
@@ -31,20 +76,18 @@ function main() {
     velocityAoiTexture: gl.getUniformLocation(updatePositionProgram, "velocityAoiTexture"), 
     positionAoiTexture: gl.getUniformLocation(updatePositionProgram, "positionAoiTexture"), 
     deltaTime: gl.getUniformLocation(updatePositionProgram, "deltaTime"), 
-    maxTurnSpeed: gl.getUniformLocation(updatePositionProgram, "maxTurnSpeed"), 
+    maxAcc: gl.getUniformLocation(updatePositionProgram, "maxAcc"), 
     minSpeed: gl.getUniformLocation(updatePositionProgram, "minSpeed"), 
     maxSpeed: gl.getUniformLocation(updatePositionProgram, "maxSpeed"), 
     separationF: gl.getUniformLocation(updatePositionProgram, "separationF"), 
     alignmentF: gl.getUniformLocation(updatePositionProgram, "alignmentF"), 
     cohesionF: gl.getUniformLocation(updatePositionProgram, "cohesionF"), 
+    aoiRadius: gl.getUniformLocation(updatePositionProgram, "aoiRadius"), 
     canvasDimensions: gl.getUniformLocation(updatePositionProgram, "canvasDimensions"), 
-    aoiTextureDimensions: gl.getUniformLocation(updatePositionProgram, "aoiTextureDimensions"), 
   };
   gl.uniform1i(updatePositionLocations.displacementAoiTexture, 0);
   gl.uniform1i(updatePositionLocations.velocityAoiTexture, 1);
   gl.uniform1i(updatePositionLocations.positionAoiTexture, 2);
-  gl.uniform2f(updatePositionLocations.canvasDimensions, canvas.width, canvas.height);
-  gl.uniform2f(updatePositionLocations.aoiTextureDimensions, aoiTextureWidth, aoiTextureHeight);
 
   // draw displacement aoi program
   console.log("Creating draw displacement aoi program");
@@ -52,11 +95,9 @@ function main() {
   gl.useProgram(drawDisplacementAoiProgram);
   const drawDisplacementAoiLocations = {
     vertex: gl.getAttribLocation(drawDisplacementAoiProgram, "vertex"), 
+    detail: gl.getUniformLocation(drawDisplacementAoiProgram, "detail"), 
     canvasDimensions: gl.getUniformLocation(drawDisplacementAoiProgram, "canvasDimensions"),
-    aoiTextureDimensions: gl.getUniformLocation(drawDisplacementAoiProgram, "aoiTextureDimensions"),
   }
-  gl.uniform2f(drawDisplacementAoiLocations.canvasDimensions, canvas.width, canvas.height);
-  gl.uniform2f(drawDisplacementAoiLocations.aoiTextureDimensions, aoiTextureWidth, aoiTextureHeight);
 
   const displacementAoiTexture = createTexture(gl);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, aoiTextureWidth, aoiTextureHeight, 0, gl.RGBA, gl.FLOAT, null);
@@ -69,11 +110,8 @@ function main() {
   const drawVelocityAoiLocations = {
     vertex: gl.getAttribLocation(drawVelocityAoiProgram, "vertex"), 
     velocity: gl.getUniformLocation(drawVelocityAoiProgram, "velocity"), 
-    canvasDimensions: gl.getUniformLocation(drawVelocityAoiProgram, "canvasDimensions"),  
-    aoiTextureDimensions: gl.getUniformLocation(drawVelocityAoiProgram, "aoiTextureDimensions"),  
+    canvasDimensions: gl.getUniformLocation(drawVelocityAoiProgram, "canvasDimensions"),   
   }
-  gl.uniform2f(drawVelocityAoiLocations.canvasDimensions, canvas.width, canvas.height);
-  gl.uniform2f(drawVelocityAoiLocations.aoiTextureDimensions, aoiTextureWidth, aoiTextureHeight);
   
   const velocityAoiTexture = createTexture(gl);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, aoiTextureWidth, aoiTextureHeight, 0, gl.RGBA, gl.FLOAT, null);
@@ -86,11 +124,8 @@ function main() {
   const drawPositionAoiLocations = {
     vertex: gl.getAttribLocation(drawPositionAoiProgram, "vertex"), 
     centre: gl.getUniformLocation(drawPositionAoiProgram, "centre"), 
-    canvasDimensions: gl.getUniformLocation(drawPositionAoiProgram, "canvasDimensions"),  
-    aoiTextureDimensions: gl.getUniformLocation(drawPositionAoiProgram, "aoiTextureDimensions"),  
+    canvasDimensions: gl.getUniformLocation(drawPositionAoiProgram, "canvasDimensions"),   
   }
-  gl.uniform2f(drawPositionAoiLocations.canvasDimensions, canvas.width, canvas.height);
-  gl.uniform2f(drawPositionAoiLocations.aoiTextureDimensions, aoiTextureWidth, aoiTextureHeight);
   
   const positionAoiTexture = createTexture(gl);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, aoiTextureWidth, aoiTextureHeight, 0, gl.RGBA, gl.FLOAT, null);
@@ -104,26 +139,52 @@ function main() {
     vertex: gl.getAttribLocation(drawBoidsProgram, "vertex"), 
     colour: gl.getAttribLocation(drawBoidsProgram, "colour"), 
     canvasDimensions: gl.getUniformLocation(drawBoidsProgram, "canvasDimensions"),  
-    aoiTextureDimensions: gl.getUniformLocation(drawBoidsProgram, "aoiTextureDimensions"),
   }
-  gl.uniform2f(drawBoidsLocations.canvasDimensions, canvas.width, canvas.height);
-  gl.uniform2f(drawBoidsLocations.aoiTextureDimensions, aoiTextureWidth, aoiTextureHeight);
+
+  // draw textures program
+  console.log("Creating draw texture program");
+  const drawTexturesProgram = createProgram(gl, DRAW_TEXTURE_VS, DRAW_TEXTURE_FS);
+  gl.useProgram(drawTexturesProgram);
+  const drawTexturesLocations = {
+    texture: gl.getUniformLocation(drawTexturesProgram, "u_texture"), 
+    canvasDimensions: gl.getUniformLocation(drawTexturesProgram, "canvasDimensions"), 
+  }
+  gl.uniform1i(drawTexturesLocations.texture, 0);
 
   /** initialisation */
-  const n = 50;
-  const initPositions = new Array(n).fill(0).map(() => [canvas.width * Math.random(), canvas.height * Math.random()]).flat();
-  const initVelocities = new Array(n).fill(0).map(() => Math.PI * 2 * Math.random()).map((angle) => [Math.cos(angle), Math.sin(angle)]).flat();
-  const positions = new Float32Array(initPositions);
-  const velocities = new Float32Array(initVelocities);
-  const params = {
-    turnSpeed: 1, 
-    minSpeed: 0.5, 
-    maxSpeed: 1.0, 
-    separationF: 1, 
-    alignmentF: 1, 
-    cohesionF: 1, 
-    aoiRadius: 50, 
+  let initPositions, initVelocities, speeds, positions, velocities;
+  let boidVertices, boidColours, boidSize;
+  function setVariables() {
+    // canvas size
+    canvas.width = gl.canvas.clientWidth;
+    canvas.height = gl.canvas.clientHeight;
+    console.log("setVariables() drawing to " + canvas.width + "," + canvas.height + " canvas");
+
+    gl.useProgram(updatePositionProgram); gl.uniform2f(updatePositionLocations.canvasDimensions, canvas.width, canvas.height);
+    gl.useProgram(drawDisplacementAoiProgram); gl.uniform2f(drawDisplacementAoiLocations.canvasDimensions, canvas.width, canvas.height);
+    gl.useProgram(drawVelocityAoiProgram); gl.uniform2f(drawVelocityAoiLocations.canvasDimensions, canvas.width, canvas.height);
+    gl.useProgram(drawPositionAoiProgram); gl.uniform2f(drawPositionAoiLocations.canvasDimensions, canvas.width, canvas.height);
+    gl.useProgram(drawBoidsProgram); gl.uniform2f(drawBoidsLocations.canvasDimensions, canvas.width, canvas.height);
+    gl.useProgram(drawTexturesProgram); gl.uniform2f(drawTexturesLocations.canvasDimensions, canvas.width, canvas.height);
+
+    // boid properties
+    initPositions = new Array(params.n).fill(0).map(() => [canvas.width * Math.random(), canvas.height * Math.random()]).flat();
+    speeds = new Array(params.n).fill(0).map(() => Math.random() * (params.maxSpeed - params.minSpeed) + params.minSpeed);
+    initVelocities = new Array(params.n).fill(0).map(() => Math.PI * 2 * Math.random()).map((angle) => [Math.cos(angle), Math.sin(angle)]).flat().map((x, i) => x * speeds[Math.floor(i / 2)]);
+    positions = new Float32Array(initPositions);
+    velocities = new Float32Array(initVelocities);
+
+    // boid display properties
+    boidSize = canvas.width * 0.01;
+    boidPoints = [
+      boidSize, 0, 
+      boidSize, boidSize / 2, 
+      boidSize, boidSize / 2, 
+    ];
+    boidVertices = new Array(params.n * boidPoints.length);
+    boidColours = new Array(params.n * boidPoints.length * 1.5).fill(0).map(() => [Math.random(), Math.random(), Math.random()]).flat();
   }
+  setVariables();
   
   /** set area of influence */
   const aoiVertexBuffer = gl.createBuffer();
@@ -136,50 +197,51 @@ function main() {
   const drawPositionAoiVertexArray = makeVertexArray(gl, [[aoiVertexBuffer, drawPositionAoiLocations.vertex, 2, gl.FLOAT]]);
 
   function drawAoi() {
-    console.log("drawAoi()");
-    const circlePoints = new Array(n).fill(0).map(
-      (x, i) => Math.PI * 2 / circleDetail * i).map(
+    const circlePoints = new Array(circleDetail + 1).fill(0).map(
+      (x, i) => angleInc * i).map(
         (a) => [Math.cos(a) * params.aoiRadius, Math.sin(a) * params.aoiRadius]).flat();
 
     // vertices for centre and points on the circumference
-    let circleVertices = new Array(n * circleDetail * 3 * 2);
+    let circleVertices = new Array(params.n * circleDetail * 3 * 2);
 
-    for(let c = 0; c < n; ++c) { // circle c of n
+    for(let c = 0; c < params.n; ++c) { // circle c of n
       let i = c * circleDetail * 3 * 2; // index of circle centre x
       for(let s = 0; s < circleDetail; ++s) { // sector s of detail
+        let j = i + s * 3 * 2;
+        
         let cx = positions[c * 2];
         let cy = positions[c * 2 + 1];
-        circleVertices[i] = cx;
-        circleVertices[i + 1] = cy;
+        circleVertices[j] = cx;
+        circleVertices[j + 1] = cy;
 
         let p1 = s * 2; // index of point on circumference
         let p2 = s * 2 + 2;
-        circleVertices[i + 2] = cx + circlePoints[p1];
-        circleVertices[i + 3] = cy + circlePoints[p1 + 1];
-        circleVertices[i + 4] = cx + circlePoints[p2];
-        circleVertices[i + 5] = cy + circlePoints[p2 + 1];
+        circleVertices[j + 2] = cx + circlePoints[p1];
+        circleVertices[j + 3] = cy + circlePoints[p1 + 1];
+        circleVertices[j + 4] = cx + circlePoints[p2];
+        circleVertices[j + 5] = cy + circlePoints[p2 + 1];
       }
     }
 
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.ONE, gl.ONE);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    gl.blendEquationSeparate(gl.FUNC_ADD, gl.MAX);
 
     /** draw displacement aoi */
-    console.log("drawing displacement aoi");
     gl.useProgram(drawDisplacementAoiProgram);
     
     gl.bindVertexArray(drawDisplacementAoiVertexArray);
     gl.bindBuffer(gl.ARRAY_BUFFER, aoiVertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(circleVertices), gl.STATIC_DRAW);
+    gl.uniform1i(drawDisplacementAoiLocations.detail, circleDetail);
     
     gl.bindFramebuffer(gl.FRAMEBUFFER, displacementAoiFramebuffer);
     gl.viewport(0, 0, aoiTextureWidth, aoiTextureHeight);
-    gl.clearBufferfv(gl.COLOR, 0, new Float32Array(4, 4, 4, 4));
+    gl.clearBufferfv(gl.COLOR, 0, new Float32Array([0, 0, 0, 1]));
 
-    gl.drawArrays(gl.TRIANGLES, 0, n * circleDetail * 3);
+    gl.drawArrays(gl.TRIANGLES, 0, params.n * circleDetail * 3);
     
     /** draw velocity aoi */
-    console.log("drawing velocity aoi");
     gl.useProgram(drawVelocityAoiProgram);
     
     gl.bindVertexArray(drawVelocityAoiVertexArray);
@@ -188,17 +250,16 @@ function main() {
     
     gl.bindFramebuffer(gl.FRAMEBUFFER, velocityAoiFramebuffer);
     gl.viewport(0, 0, aoiTextureWidth, aoiTextureHeight);
-    gl.clearBufferfv(gl.COLOR, 0, new Float32Array(4, 4, 4, 4));
+    gl.clearBufferfv(gl.COLOR, 0, new Float32Array([0, 0, 0, 1]));
 
     // draw elements for each circle
-    for (let c = 0; c < n; ++c) {
+    for (let c = 0; c < params.n; ++c) {
       gl.uniform2f(drawVelocityAoiLocations.velocity, velocities[c * 2], velocities[c * 2 + 1]);
       
       gl.drawArrays(gl.TRIANGLES, c * circleDetail * 3, circleDetail * 3);
     }
 
     /** draw position aoi */
-    console.log("drawing position aoi");
     gl.useProgram(drawPositionAoiProgram);
 
     gl.bindVertexArray(drawPositionAoiVertexArray);
@@ -207,10 +268,10 @@ function main() {
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, positionAoiFramebuffer);
     gl.viewport(0, 0, aoiTextureWidth, aoiTextureHeight);
-    gl.clearBufferfv(gl.COLOR, 0, new Float32Array(4, 4, 4, 4));
+    gl.clearBufferfv(gl.COLOR, 0, new Float32Array([0, 0, 0, 1]));
 
-    for (let c = 0; c < n; ++c) {
-      gl.uniform2f(drawPositionAoiLocations.velocity, velocities[c * 2], velocities[c * 2 + 1]);
+    for (let c = 0; c < params.n; ++c) {
+      gl.uniform2f(drawPositionAoiLocations.centre, positions[c * 2], positions[c * 2 + 1]);
       
       gl.drawArrays(gl.TRIANGLES, c * circleDetail * 3, circleDetail * 3);
     }
@@ -254,22 +315,18 @@ function main() {
   };
 
   function updateBoids(deltaTime) {
-    console.log("updateBoids() current velocities: ");
-    console.log(velocities);
-    console.log("updateBoids() current positions: ");
-    console.log(positions);
-    
     gl.useProgram(updatePositionProgram);
 
     // set data
     gl.bindVertexArray(current.vertexArray);
     gl.uniform1f(updatePositionLocations.deltaTime, deltaTime);
-    gl.uniform1f(updatePositionLocations.turnSpeed, params.maxTurnSpeed);
+    gl.uniform1f(updatePositionLocations.maxAcc, params.maxAcc);
     gl.uniform1f(updatePositionLocations.minSpeed, params.minSpeed);
     gl.uniform1f(updatePositionLocations.maxSpeed, params.maxSpeed);
     gl.uniform1f(updatePositionLocations.separationF, params.separationF);
     gl.uniform1f(updatePositionLocations.alignmentF, params.alignmentF);
     gl.uniform1f(updatePositionLocations.cohesionF, params.cohesionF);
+    gl.uniform1f(updatePositionLocations.aoiRadius, params.aoiRadius);
 
     // bind textures
     gl.activeTexture(gl.TEXTURE0);
@@ -287,7 +344,7 @@ function main() {
     gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, current.transformFeedback);
     gl.beginTransformFeedback(gl.POINTS);
     
-    gl.drawArrays(gl.POINTS, 0, n);
+    gl.drawArrays(gl.POINTS, 0, params.n);
     
     gl.endTransformFeedback();
     gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
@@ -299,43 +356,29 @@ function main() {
     gl.bindBuffer(gl.ARRAY_BUFFER, current.outputPositionBuffer);
     gl.getBufferSubData(gl.ARRAY_BUFFER, 0, positions);
 
-    console.log("updateBoids() new velocities: ");
-    console.log(velocities);
-    console.log("updateBoids() new positions: ");
-    console.log(positions);
-
     let temp = current;
     current = next;
     next = temp;
   }
 
   /** draw boids */
-  const boidPositionBuffer = gl.createBuffer();
+  const boidVertexBuffer = gl.createBuffer();
   const boidColourBuffer = gl.createBuffer();
 
   const boidVertexArray = makeVertexArray(gl, [
-    [boidPositionBuffer, drawBoidsLocations.position, 2, gl.FLOAT], 
+    [boidVertexBuffer, drawBoidsLocations.position, 2, gl.FLOAT], 
     [boidColourBuffer, drawBoidsLocations.colour, 3, gl.FLOAT], 
   ]);
-
-  let boidPoints = [
-    10, 0, 
-    -10, -5, 
-    -10, 5, 
-  ];
-  let boidPositions = new Array(n * boidPoints.length);
-  let boidColours = new Array(n * boidPoints.length * 1.5).fill(1);
   
   function drawBoids() {
-    console.log("drawBoids()");
-    for (let b = 0; b < n; ++b) { // boid b of n
+    for (let b = 0; b < params.n; ++b) { // boid b of n
       let i = b * 2;
       let px = positions[i];
       let py = positions[i + 1];
       let vx = velocities[i];
       let vy = velocities[i + 1];
 
-      let k = b * boidPoints.length; // index of first x coordinate within boidPositions
+      let k = b * boidPoints.length; // index of first x coordinate within boidVertices
       for (let j = 0; j < boidPoints.length; j += 2) { // vertex j of 3
         let v = [boidPoints[j], boidPoints[j + 1], 0];
         let u = Vec3.normalise([vx, vy, 0]);
@@ -344,16 +387,16 @@ function main() {
           v[0]*u[1] + v[1]*u[0], 
         ];
 
-        boidPositions[k + j] = px + v2[0];
-        boidPositions[k + j + 1] = py + v2[1];
+        boidVertices[k + j] = px + v2[0];
+        boidVertices[k + j + 1] = py + v2[1];
       }
     }
 
     gl.useProgram(drawBoidsProgram);
 
     gl.bindVertexArray(boidVertexArray);
-    gl.bindBuffer(gl.ARRAY_BUFFER, boidPositionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(boidPositions), gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, boidVertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(boidVertices), gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, boidColourBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(boidColours), gl.STATIC_DRAW);
     
@@ -362,23 +405,83 @@ function main() {
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    gl.drawArrays(gl.TRIANGLES, 0, n * boidPoints.length * 0.5);
+    gl.drawArrays(gl.TRIANGLES, 0, params.n * boidPoints.length * 0.5);
   }
 
+  function drawTexture(texture) {
+    gl.useProgram(drawTexturesProgram);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.drawArrays(gl.POINTS, 0, 1);
+  }
+
+  // simulation functions
+  function setSimulation() {
+    setParams();
+    setVariables();
+    step(0);
+  }
+  step(0);
 
   function step(deltaTime) {
+    console.log("step");
     drawAoi();
     updateBoids(deltaTime);
     drawBoids();
+    // console.log(velocities);
+    // console.log(velocities.filter(x => isNaN(x)))
+    // drawTexture(displacementAoiTexture);
   }
 
-  step(0.05);
+  
 
+  let then = 0
   function loop(time) {
-    step();
+    if (!play) {
+      return;
+    }
+    let deltaTime = time - then;
+    then = time;
+    step(0.05);
     requestAnimationFrame(loop);
   }
   // requestAnimationFrame(loop);
+
+  function keyPress(event) {
+    if (event.key == ' ') {
+      playPause();
+    }
+  }
+
+  let play = false;
+  function playPause(time) {
+    play = !play;
+    if (play) {
+      then = time;
+      loop(time);
+    }
+  }
+
+  document.addEventListener("keypress", playPause);
+
+  let i = 0;
+  const steps = [
+    () => {
+      step(0.05);
+      console.log(positions);
+      console.log(velocities);
+      console.log(boidVertices);
+    },
+  ];
+
+  function manualStep() {
+    steps[i % steps.length]();
+    ++i;
+  }
+
+  canvas.addEventListener("click", manualStep);
 }
 
 function createShader(gl, type, source) {
@@ -416,18 +519,17 @@ function createTexture(gl) {
   let texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
 
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
   return texture;
 }
 
 function createFramebuffer(gl, texture) {
-  const framebuffer = gl.createFramebuffer();
+  let framebuffer = gl.createFramebuffer();
   gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+  return framebuffer;
 }
 
 function makeBuffer(gl, data, usage) {
