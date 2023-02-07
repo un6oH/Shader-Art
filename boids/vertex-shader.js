@@ -13,9 +13,11 @@ uniform float maxSpeed;
 uniform float separationF;
 uniform float alignmentF;
 uniform float cohesionF;
+uniform bool mouseActive;
+uniform float mouseAvoidanceF;
+uniform vec2 mousePos;
 uniform float aoiRadius;
 uniform vec2 canvasDimensions; // constant
-uniform vec2 aoiTextureDimensions; // constant
 
 out vec2 newVelocity;
 out vec2 newPosition;
@@ -46,7 +48,17 @@ void main() {
   vec2 cohesionVector = avgPosition - position;
 
   vec2 targetVelocity = separationVector * separationF + alignmentVector * alignmentF + cohesionVector * cohesionF;
-  // targetVelocity /= separationF + alignmentF + cohesionF;
+
+  // mouse avoidance
+  if (mouseActive) {
+    vec2 mouseDisplacement = mousePos - position;
+    float distanceToMouse = length(mouseDisplacement);
+    if (distanceToMouse > aoiRadius) {
+      return;
+    }
+    vec2 mouseAvoidanceVector = mouseDisplacement - normalize(mouseDisplacement) * aoiRadius;
+    targetVelocity += mouseAvoidanceVector * mouseAvoidanceF;
+  }
 
   vec2 acc = targetVelocity - velocity;
   float accMag = length(acc);
@@ -72,7 +84,6 @@ in vec2 vertex;
 
 uniform int detail;
 uniform vec2 canvasDimensions; // constant
-uniform vec2 aoiTextureDimensions; // constant
 
 out vec2 displacement;
 
@@ -103,7 +114,6 @@ const DRAW_VELOCITY_AOI_VS = `#version 300 es
 in vec2 vertex;
 
 uniform vec2 canvasDimensions; // constant
-uniform vec2 aoiTextureDimensions; // constant
 
 void main() {
   vec2 normCoords = vertex / canvasDimensions;
@@ -117,7 +127,6 @@ const DRAW_POSITION_AOI_VS = `#version 300 es
 in vec2 vertex;
 
 uniform vec2 canvasDimensions; // constant
-uniform vec2 aoiTextureDimensions; // constant
 
 void main() {
   vec2 normCoords = vertex / canvasDimensions;
@@ -134,7 +143,6 @@ in vec2 position;
 in vec3 colour;
 
 uniform vec2 canvasDimensions; // constant
-uniform vec2 aoiTextureDimensions; // constant
 
 out vec3 v_colour;
 
@@ -143,6 +151,7 @@ void main() {
   vec2 clipSpace = normCoords * 2.0 - 1.0;
   gl_Position = vec4(clipSpace, 0, 1);
   v_colour = colour;
+  gl_PointSize = 10.0;
 }
 `;
 

@@ -67,7 +67,7 @@ out vec4 colour;
 void main() {
   vec3 v = texture(u_texture, gl_FragCoord.xy / canvasDimensions).xyz;
   if (v.z != 0.) {
-    v.xy /= v.z;
+    v.xy /= v.z * 60.0;
   }
   colour = vec4(0.5 + 0.5 * v.xy, 10./255. * v.z, 1.0);
 }

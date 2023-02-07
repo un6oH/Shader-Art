@@ -19,12 +19,12 @@ function main() {
     separationF: 1, 
     alignmentF: 0.5, 
     cohesionF: 0.5, 
+    mouseAvoidanceF: 0.5, 
     aoiRadius: 50, 
     boidSize: 10, 
   };
 
   const resetButton = document.querySelector("#reset");
-
   const inputs = {
     n: document.querySelector("#n"),
     maxAcc: document.querySelector("#maxAcc"),
@@ -33,30 +33,42 @@ function main() {
     separationF: document.querySelector("#separationF"),
     alignmentF: document.querySelector("#alignmentF"),
     cohesionF: document.querySelector("#cohesionF"),
+    mouseAvoidanceF: document.querySelector("#mouseAvoidanceF"), 
     aoiRadius: document.querySelector("#aoiRadius"),
   };
-
   const outputs = {
     separationF: document.querySelector("#separationFValue"), 
     alignmentF: document.querySelector("#alignmentFValue"), 
     cohesionF: document.querySelector("#cohesionFValue"), 
+    mouseAvoidanceF: document.querySelector("#mouseAvoidanceFValue"), 
   };
 
-  ["separationF", "alignmentF", "cohesionF"].forEach((id) => {
+  ["separationF", "alignmentF", "cohesionF", "mouseAvoidanceF"].forEach((id) => {
     outputs[id].textContent = inputs[id].value;
     inputs[id].addEventListener("input", (event) => {
       outputs[id].textContent = event.target.value;
     });
   })
 
-  resetButton.addEventListener("click", () => setSimulation());
+  resetButton.addEventListener("click", setSimulation);
+
+  let showSettings = true;
+  const parameterContainer = document.querySelector("#parameter-container");
+  function showHideSettings() {
+    showSettings = !showSettings;
+    console.log("Settings " + (showSettings ? "shown" : "hidden"));
+    if (showSettings) {
+      parameterContainer.style.zIndex = 1;
+    } else {
+      parameterContainer.style.zIndex = -1;
+    }
+  }
 
   function setParams() {
     for (let input in inputs) {
       params[input] = parseFloat(inputs[input].value);
     }
-    console.log("setParams()")
-    console.log(params);
+    console.log("setParams() params: ", params);
   }
   setParams();
 
@@ -82,6 +94,9 @@ function main() {
     separationF: gl.getUniformLocation(updatePositionProgram, "separationF"), 
     alignmentF: gl.getUniformLocation(updatePositionProgram, "alignmentF"), 
     cohesionF: gl.getUniformLocation(updatePositionProgram, "cohesionF"), 
+    mouseActive: gl.getUniformLocation(updatePositionProgram, "mouseActive"), 
+    mouseAvoidanceF: gl.getUniformLocation(updatePositionProgram, "mouseAvoidanceF"), 
+    mousePos: gl.getUniformLocation(updatePositionProgram, "mousePos"), 
     aoiRadius: gl.getUniformLocation(updatePositionProgram, "aoiRadius"), 
     canvasDimensions: gl.getUniformLocation(updatePositionProgram, "canvasDimensions"), 
   };
@@ -136,7 +151,7 @@ function main() {
   const drawBoidsProgram = createProgram(gl, DRAW_BOIDS_VS, DRAW_BOIDS_FS);
   gl.useProgram(drawBoidsProgram);
   const drawBoidsLocations = {
-    vertex: gl.getAttribLocation(drawBoidsProgram, "vertex"), 
+    position: gl.getAttribLocation(drawBoidsProgram, "position"), 
     colour: gl.getAttribLocation(drawBoidsProgram, "colour"), 
     canvasDimensions: gl.getUniformLocation(drawBoidsProgram, "canvasDimensions"),  
   }
@@ -151,9 +166,38 @@ function main() {
   }
   gl.uniform1i(drawTexturesLocations.texture, 0);
 
-  /** initialisation */
-  let initPositions, initVelocities, speeds, positions, velocities;
-  let boidVertices, boidColours, boidSize;
+  /** set variables */
+  canvas.width = gl.canvas.clientWidth;
+  canvas.height = gl.canvas.clientHeight;
+  
+  // boid properties
+  const boids = {};
+  const speeds = new Array(params.n).fill(0).map(() => Math.random() * (params.maxSpeed - params.minSpeed) + params.minSpeed);
+  boids.positions = new Float32Array(new Array(params.n).fill(0).map(() => [canvas.width * Math.random(), canvas.height * Math.random()]).flat());
+  boids.velocities = new Float32Array(new Array(params.n).fill(0).map(() => Math.PI * 2 * Math.random()).map((angle) => [Math.cos(angle), Math.sin(angle)]).flat().map((x, i) => x * speeds[Math.floor(i / 2)]));
+  
+  const velocity1Buffer = makeBuffer(gl, boids.velocities, gl.STATIC_DRAW);
+  const position1Buffer = makeBuffer(gl, boids.positions, gl.STATIC_DRAW);
+  const velocity2Buffer = makeBuffer(gl, boids.velocities, gl.STATIC_DRAW);
+  const position2Buffer = makeBuffer(gl, boids.positions, gl.STATIC_DRAW);
+
+  // display properties
+  boids.size = canvas.height * 0.01;
+  boids.spriteMesh = [
+    boids.size, 0, 
+    -boids.size, boids.size / 2, 
+    -boids.size, -boids.size / 2, 
+  ];
+  boids.drawColours = new Float32Array(new Array(params.n * boids.spriteMesh.length * 0.5).fill(0).map(() => [Math.random(), Math.random(), Math.random()]).flat());
+  const boidColourBuffer = makeBuffer(gl, boids.drawColours, gl.STATIC_DRAW);
+
+  gl.useProgram(updatePositionProgram); gl.uniform2f(updatePositionLocations.canvasDimensions, canvas.width, canvas.height);
+  gl.useProgram(drawDisplacementAoiProgram); gl.uniform2f(drawDisplacementAoiLocations.canvasDimensions, canvas.width, canvas.height);
+  gl.useProgram(drawVelocityAoiProgram); gl.uniform2f(drawVelocityAoiLocations.canvasDimensions, canvas.width, canvas.height);
+  gl.useProgram(drawPositionAoiProgram); gl.uniform2f(drawPositionAoiLocations.canvasDimensions, canvas.width, canvas.height);
+  gl.useProgram(drawBoidsProgram); gl.uniform2f(drawBoidsLocations.canvasDimensions, canvas.width, canvas.height);
+  gl.useProgram(drawTexturesProgram); gl.uniform2f(drawTexturesLocations.canvasDimensions, canvas.width, canvas.height);
+  
   function setVariables() {
     // canvas size
     canvas.width = gl.canvas.clientWidth;
@@ -168,23 +212,31 @@ function main() {
     gl.useProgram(drawTexturesProgram); gl.uniform2f(drawTexturesLocations.canvasDimensions, canvas.width, canvas.height);
 
     // boid properties
-    initPositions = new Array(params.n).fill(0).map(() => [canvas.width * Math.random(), canvas.height * Math.random()]).flat();
-    speeds = new Array(params.n).fill(0).map(() => Math.random() * (params.maxSpeed - params.minSpeed) + params.minSpeed);
-    initVelocities = new Array(params.n).fill(0).map(() => Math.PI * 2 * Math.random()).map((angle) => [Math.cos(angle), Math.sin(angle)]).flat().map((x, i) => x * speeds[Math.floor(i / 2)]);
-    positions = new Float32Array(initPositions);
-    velocities = new Float32Array(initVelocities);
+    speeds.length = params.n;
+    speeds.fill(0);
+    speeds.forEach((value, index) => {
+      speeds[index] = Math.random() * (params.maxSpeed - params.minSpeed) + params.minSpeed;
+    })
+    boids.positions = new Float32Array(new Array(params.n).fill(0).map(() => [canvas.width * Math.random(), canvas.height * Math.random()]).flat());
+    boids.velocities = new Float32Array(new Array(params.n).fill(0).map(() => Math.PI * 2 * Math.random()).map((angle) => [Math.cos(angle), Math.sin(angle)]).flat().map((x, i) => x * speeds[Math.floor(i / 2)]));
+
+    // update boids buffers
+    gl.bindBuffer(gl.ARRAY_BUFFER, velocity1Buffer); gl.bufferData(gl.ARRAY_BUFFER, boids.velocities, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, velocity2Buffer); gl.bufferData(gl.ARRAY_BUFFER, boids.velocities, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, position1Buffer); gl.bufferData(gl.ARRAY_BUFFER, boids.positions, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, position2Buffer); gl.bufferData(gl.ARRAY_BUFFER, boids.positions, gl.STATIC_DRAW);
 
     // boid display properties
-    boidSize = canvas.width * 0.01;
-    boidPoints = [
-      boidSize, 0, 
-      boidSize, boidSize / 2, 
-      boidSize, boidSize / 2, 
+    boids.size = canvas.height * 0.01;
+    boids.spriteMesh = [
+      boids.size, 0, 
+      -boids.size, boids.size / 2, 
+      -boids.size, -boids.size / 2, 
     ];
-    boidVertices = new Array(params.n * boidPoints.length);
-    boidColours = new Array(params.n * boidPoints.length * 1.5).fill(0).map(() => [Math.random(), Math.random(), Math.random()]).flat();
+    boids.drawColours = new Float32Array(new Array(params.n * boids.spriteMesh.length * 0.5).fill(0).map(() => [Math.random(), Math.random(), Math.random()]).flat());
+    gl.bindBuffer(gl.ARRAY_BUFFER, boidColourBuffer); gl.bufferData(gl.ARRAY_BUFFER, boids.drawColours, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, boidVertexBuffer); gl.bufferData(gl.ARRAY_BUFFER, params.n * boids.spriteMesh.length, gl.STATIC_DRAW);
   }
-  setVariables();
   
   /** set area of influence */
   const aoiVertexBuffer = gl.createBuffer();
@@ -197,6 +249,7 @@ function main() {
   const drawPositionAoiVertexArray = makeVertexArray(gl, [[aoiVertexBuffer, drawPositionAoiLocations.vertex, 2, gl.FLOAT]]);
 
   function drawAoi() {
+    // console.log("drawAoi");
     const circlePoints = new Array(circleDetail + 1).fill(0).map(
       (x, i) => angleInc * i).map(
         (a) => [Math.cos(a) * params.aoiRadius, Math.sin(a) * params.aoiRadius]).flat();
@@ -209,8 +262,8 @@ function main() {
       for(let s = 0; s < circleDetail; ++s) { // sector s of detail
         let j = i + s * 3 * 2;
         
-        let cx = positions[c * 2];
-        let cy = positions[c * 2 + 1];
+        let cx = boids.positions[c * 2];
+        let cy = boids.positions[c * 2 + 1];
         circleVertices[j] = cx;
         circleVertices[j + 1] = cy;
 
@@ -254,7 +307,7 @@ function main() {
 
     // draw elements for each circle
     for (let c = 0; c < params.n; ++c) {
-      gl.uniform2f(drawVelocityAoiLocations.velocity, velocities[c * 2], velocities[c * 2 + 1]);
+      gl.uniform2f(drawVelocityAoiLocations.velocity, boids.velocities[c * 2], boids.velocities[c * 2 + 1]);
       
       gl.drawArrays(gl.TRIANGLES, c * circleDetail * 3, circleDetail * 3);
     }
@@ -271,7 +324,7 @@ function main() {
     gl.clearBufferfv(gl.COLOR, 0, new Float32Array([0, 0, 0, 1]));
 
     for (let c = 0; c < params.n; ++c) {
-      gl.uniform2f(drawPositionAoiLocations.centre, positions[c * 2], positions[c * 2 + 1]);
+      gl.uniform2f(drawPositionAoiLocations.centre, boids.positions[c * 2], boids.positions[c * 2 + 1]);
       
       gl.drawArrays(gl.TRIANGLES, c * circleDetail * 3, circleDetail * 3);
     }
@@ -281,10 +334,6 @@ function main() {
   }
 
   /** update positions */
-  const velocity1Buffer = makeBuffer(gl, velocities, gl.STATIC_DRAW);
-  const position1Buffer = makeBuffer(gl, positions, gl.STATIC_DRAW);
-  const velocity2Buffer = makeBuffer(gl, velocities, gl.STATIC_DRAW);
-  const position2Buffer = makeBuffer(gl, positions, gl.STATIC_DRAW);
   
   const updatePositionVertexArray1 = makeVertexArray(gl, [
     [velocity1Buffer, updatePositionLocations.velocity, 2, gl.FLOAT], 
@@ -314,7 +363,12 @@ function main() {
     outputPositionBuffer: position1Buffer,
   };
 
+  let mouseActive = false;
+  let mouseX = 0;
+  let mouseY = 0;
+
   function updateBoids(deltaTime) {
+    // console.log("updateBoids()");
     gl.useProgram(updatePositionProgram);
 
     // set data
@@ -325,6 +379,9 @@ function main() {
     gl.uniform1f(updatePositionLocations.maxSpeed, params.maxSpeed);
     gl.uniform1f(updatePositionLocations.separationF, params.separationF);
     gl.uniform1f(updatePositionLocations.alignmentF, params.alignmentF);
+    // gl.uniform1i(updatePositionLocations.mouseActive, mouseActive);
+    // gl.uniform1f(updatePositionLocations.mouseAvoidanceF, params.mouseAvoidanceF);
+    // gl.uniform2f(updatePositionLocations.mousePos, mouseX, mouseY);
     gl.uniform1f(updatePositionLocations.cohesionF, params.cohesionF);
     gl.uniform1f(updatePositionLocations.aoiRadius, params.aoiRadius);
 
@@ -352,9 +409,9 @@ function main() {
 
     // read buffer
     gl.bindBuffer(gl.ARRAY_BUFFER, current.outputVelocityBuffer);
-    gl.getBufferSubData(gl.ARRAY_BUFFER, 0, velocities);
+    gl.getBufferSubData(gl.ARRAY_BUFFER, 0, boids.velocities);
     gl.bindBuffer(gl.ARRAY_BUFFER, current.outputPositionBuffer);
-    gl.getBufferSubData(gl.ARRAY_BUFFER, 0, positions);
+    gl.getBufferSubData(gl.ARRAY_BUFFER, 0, boids.positions);
 
     let temp = current;
     current = next;
@@ -363,7 +420,6 @@ function main() {
 
   /** draw boids */
   const boidVertexBuffer = gl.createBuffer();
-  const boidColourBuffer = gl.createBuffer();
 
   const boidVertexArray = makeVertexArray(gl, [
     [boidVertexBuffer, drawBoidsLocations.position, 2, gl.FLOAT], 
@@ -371,41 +427,47 @@ function main() {
   ]);
   
   function drawBoids() {
+    // console.log("drawBoids()");
+    let drawVertices = new Array(params.n * boids.spriteMesh.length);
+
     for (let b = 0; b < params.n; ++b) { // boid b of n
       let i = b * 2;
-      let px = positions[i];
-      let py = positions[i + 1];
-      let vx = velocities[i];
-      let vy = velocities[i + 1];
+      let px = boids.positions[i];
+      let py = boids.positions[i + 1];
+      let vx = boids.velocities[i];
+      let vy = boids.velocities[i + 1];
 
-      let k = b * boidPoints.length; // index of first x coordinate within boidVertices
-      for (let j = 0; j < boidPoints.length; j += 2) { // vertex j of 3
-        let v = [boidPoints[j], boidPoints[j + 1], 0];
+      let k = b * boids.spriteMesh.length; // index of first x coordinate within boidVertices
+      for (let j = 0; j < boids.spriteMesh.length; j += 2) { // vertex j of 6
+        let v = [boids.spriteMesh[j], boids.spriteMesh[j + 1], 0];
         let u = Vec3.normalise([vx, vy, 0]);
         let v2 = [
           v[0]*u[0] - v[1]*u[1], 
           v[0]*u[1] + v[1]*u[0], 
         ];
 
-        boidVertices[k + j] = px + v2[0];
-        boidVertices[k + j + 1] = py + v2[1];
+        drawVertices[k + j] = px + v2[0];
+        drawVertices[k + j + 1] = py + v2[1];
       }
     }
 
     gl.useProgram(drawBoidsProgram);
 
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    gl.uniform2f(drawBoidsLocations.canvasDimensions, canvas.width, canvas.height);
+
     gl.bindVertexArray(boidVertexArray);
     gl.bindBuffer(gl.ARRAY_BUFFER, boidVertexBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(boidVertices), gl.STATIC_DRAW);
-    gl.bindBuffer(gl.ARRAY_BUFFER, boidColourBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(boidColours), gl.STATIC_DRAW);
-    
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(drawVertices), gl.STATIC_DRAW);
+
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    gl.drawArrays(gl.TRIANGLES, 0, params.n * boidPoints.length * 0.5);
+    gl.drawArrays(gl.TRIANGLES, 0, params.n * boids.spriteMesh.length * 0.5);
   }
 
   function drawTexture(texture) {
@@ -417,62 +479,75 @@ function main() {
     gl.drawArrays(gl.POINTS, 0, 1);
   }
 
+  function clearCanvas() {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+  clearCanvas();
+
   // simulation functions
   function setSimulation() {
+    console.log("\n<< Simulation reset >>\n\n");
     setParams();
     setVariables();
+    clearCanvas();
     step(0);
   }
   step(0);
 
   function step(deltaTime) {
-    console.log("step");
+    console.log("\nstep() deltaTime = " + deltaTime);
     drawAoi();
     updateBoids(deltaTime);
     drawBoids();
     // console.log(velocities);
     // console.log(velocities.filter(x => isNaN(x)))
-    // drawTexture(displacementAoiTexture);
+    // drawTexture(velocityAoiTexture);
   }
-
-  
 
   let then = 0
   function loop(time) {
     if (!play) {
+      console.log("-+- STOPPED LOOP -+-\n\n\n")
       return;
     }
     let deltaTime = time - then;
     then = time;
-    step(0.05);
+
+    step(deltaTime * 0.001);
+    
     requestAnimationFrame(loop);
   }
-  // requestAnimationFrame(loop);
 
   function keyPress(event) {
     if (event.key == ' ') {
       playPause();
+    } else if (event.key == 'Enter') {
+      showHideSettings();
     }
   }
 
   let play = false;
-  function playPause(time) {
+  function playPause() {
     play = !play;
     if (play) {
+      console.log("\n\n-+- STARTED LOOP -+-")
+      let time = performance.now();
       then = time;
       loop(time);
     }
   }
 
-  document.addEventListener("keypress", playPause);
+  document.addEventListener("keypress", keyPress);
 
   let i = 0;
   const steps = [
     () => {
-      step(0.05);
-      console.log(positions);
-      console.log(velocities);
-      console.log(boidVertices);
+      // console.log("\n\nStep\n\n\n");
+      drawAoi();
+      updateBoids(0.05);
+      drawTexture(displacementAoiTexture);
     },
   ];
 
@@ -481,7 +556,17 @@ function main() {
     ++i;
   }
 
-  canvas.addEventListener("click", manualStep);
+  // mouse avoidance
+  document.addEventListener("mousemove", (event) => {
+    mouseX = event.clientX;
+    mouseY = event.clientY;
+  });
+  document.addEventListener("mousedown", () => {
+    mouseActive = true;
+  });
+  document.addEventListener("mouseup", () => {
+    mouseActive = false;
+  });
 }
 
 function createShader(gl, type, source) {
