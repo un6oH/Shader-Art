@@ -155,16 +155,29 @@ function main() {
     colour: gl.getAttribLocation(drawBoidsProgram, "colour"), 
     canvasDimensions: gl.getUniformLocation(drawBoidsProgram, "canvasDimensions"),  
   }
+  const outputTexture = createTexture(gl);
+  const outputFramebuffer = createFramebuffer(gl, outputTexture);
 
   // draw textures program
   console.log("Creating draw texture program");
   const drawTexturesProgram = createProgram(gl, DRAW_TEXTURE_VS, DRAW_TEXTURE_FS);
   gl.useProgram(drawTexturesProgram);
   const drawTexturesLocations = {
+    position: gl.getAttribLocation(drawTexturesProgram, "position"), 
     texture: gl.getUniformLocation(drawTexturesProgram, "u_texture"), 
     canvasDimensions: gl.getUniformLocation(drawTexturesProgram, "canvasDimensions"), 
   }
   gl.uniform1i(drawTexturesLocations.texture, 0);
+
+  // clear canvas program
+  console.log("Creating clear canvas program");
+  const clearCanvasProgram = createProgram(gl, CLEAR_CANVAS_VS, CLEAR_CANVAS_FS);
+  gl.useProgram(clearCanvasProgram);
+  const clearCanvasLocations = {
+    position: gl.getAttribLocation(clearCanvasProgram, "position"), 
+    canvasWidth: gl.getUniformLocation(clearCanvasProgram, "canvasWidth"),
+    clearColour: gl.getUniformLocation(clearCanvasProgram, "clearColour"),
+  }
 
   /** set variables */
   canvas.width = gl.canvas.clientWidth;
@@ -191,12 +204,16 @@ function main() {
   boids.drawColours = new Float32Array(new Array(params.n * boids.spriteMesh.length * 0.5).fill(0).map(() => [Math.random(), Math.random(), Math.random()]).flat());
   const boidColourBuffer = makeBuffer(gl, boids.drawColours, gl.STATIC_DRAW);
 
+  gl.bindTexture(gl.TEXTURE_2D, outputTexture);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
   gl.useProgram(updatePositionProgram); gl.uniform2f(updatePositionLocations.canvasDimensions, canvas.width, canvas.height);
   gl.useProgram(drawDisplacementAoiProgram); gl.uniform2f(drawDisplacementAoiLocations.canvasDimensions, canvas.width, canvas.height);
   gl.useProgram(drawVelocityAoiProgram); gl.uniform2f(drawVelocityAoiLocations.canvasDimensions, canvas.width, canvas.height);
   gl.useProgram(drawPositionAoiProgram); gl.uniform2f(drawPositionAoiLocations.canvasDimensions, canvas.width, canvas.height);
   gl.useProgram(drawBoidsProgram); gl.uniform2f(drawBoidsLocations.canvasDimensions, canvas.width, canvas.height);
   gl.useProgram(drawTexturesProgram); gl.uniform2f(drawTexturesLocations.canvasDimensions, canvas.width, canvas.height);
+  gl.useProgram(clearCanvasProgram); gl.uniform1f(clearCanvasLocations.canvasWidth, canvas.width);
   
   function setVariables() {
     // canvas size
@@ -210,6 +227,7 @@ function main() {
     gl.useProgram(drawPositionAoiProgram); gl.uniform2f(drawPositionAoiLocations.canvasDimensions, canvas.width, canvas.height);
     gl.useProgram(drawBoidsProgram); gl.uniform2f(drawBoidsLocations.canvasDimensions, canvas.width, canvas.height);
     gl.useProgram(drawTexturesProgram); gl.uniform2f(drawTexturesLocations.canvasDimensions, canvas.width, canvas.height);
+    gl.useProgram(clearCanvasProgram); gl.uniform1f(clearCanvasLocations.canvasWidth, canvas.width);
 
     // boid properties
     speeds.length = params.n;
@@ -236,6 +254,9 @@ function main() {
     boids.drawColours = new Float32Array(new Array(params.n * boids.spriteMesh.length * 0.5).fill(0).map(() => [Math.random(), Math.random(), Math.random()]).flat());
     gl.bindBuffer(gl.ARRAY_BUFFER, boidColourBuffer); gl.bufferData(gl.ARRAY_BUFFER, boids.drawColours, gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, boidVertexBuffer); gl.bufferData(gl.ARRAY_BUFFER, params.n * boids.spriteMesh.length, gl.STATIC_DRAW);
+
+    gl.bindTexture(gl.TEXTURE_2D, outputTexture);
+     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
   }
   
   /** set area of influence */
@@ -426,6 +447,13 @@ function main() {
     [boidColourBuffer, drawBoidsLocations.colour, 3, gl.FLOAT], 
   ]);
   
+  const canvasPositionBuffer = makeBuffer(gl, new Float32Array([
+    -1, -1, 1, -1, 1, 1, 
+    -1, -1, 1, 1, -1, 1, 
+  ]), gl.STATIC_DRAW);
+  const drawTextureVertexArray = makeVertexArray(gl, [[canvasPositionBuffer, drawTexturesLocations.position, 2, gl.FLOAT]]);
+  const clearCanvasVertexArray = makeVertexArray(gl, [[canvasPositionBuffer, clearCanvasLocations.position, 2, gl.FLOAT]]);
+
   function drawBoids() {
     // console.log("drawBoids()");
     let drawVertices = new Array(params.n * boids.spriteMesh.length);
@@ -451,36 +479,52 @@ function main() {
       }
     }
 
-    gl.useProgram(drawBoidsProgram);
-
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    // gl.blendEquation(gl.FUNC_ADD);
 
+    gl.bindFramebuffer(gl.FRAMEBUFFER, outputFramebuffer);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    
+    // fade out previous canvas
+    gl.useProgram(clearCanvasProgram);
+    gl.bindVertexArray(clearCanvasVertexArray);
+    gl.uniform1f(clearCanvasLocations.canvasWidth, canvas.width);
+    gl.uniform4f(clearCanvasLocations.clearColour, 0, 0, 0, 0.11);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    
+    gl.disable(gl.BLEND);
+
+    // draw boids
+    gl.useProgram(drawBoidsProgram);
+  
     gl.uniform2f(drawBoidsLocations.canvasDimensions, canvas.width, canvas.height);
 
     gl.bindVertexArray(boidVertexArray);
     gl.bindBuffer(gl.ARRAY_BUFFER, boidVertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(drawVertices), gl.STATIC_DRAW);
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.clearColor(0, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-
     gl.drawArrays(gl.TRIANGLES, 0, params.n * boids.spriteMesh.length * 0.5);
   }
 
   function drawTexture(texture) {
     gl.useProgram(drawTexturesProgram);
+
+    gl.bindVertexArray(drawTextureVertexArray);
+
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
+
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.drawArrays(gl.POINTS, 0, 1);
-  }
 
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+  
   function clearCanvas() {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, outputFramebuffer);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
   }
@@ -501,9 +545,7 @@ function main() {
     drawAoi();
     updateBoids(deltaTime);
     drawBoids();
-    // console.log(velocities);
-    // console.log(velocities.filter(x => isNaN(x)))
-    // drawTexture(velocityAoiTexture);
+    drawTexture(outputTexture);
   }
 
   let then = 0
@@ -515,7 +557,8 @@ function main() {
     let deltaTime = time - then;
     then = time;
 
-    step(deltaTime * 0.001);
+    // step(deltaTime * 0.001);
+    step(0.01);
     
     requestAnimationFrame(loop);
   }

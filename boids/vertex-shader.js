@@ -151,16 +151,23 @@ void main() {
   vec2 clipSpace = normCoords * 2.0 - 1.0;
   gl_Position = vec4(clipSpace, 0, 1);
   v_colour = colour;
-  gl_PointSize = 10.0;
 }
 `;
 
 const DRAW_TEXTURE_VS = `#version 300 es
 
-uniform vec2 canvasDimensions;
+in vec2 position;
 
 void main() {
-  gl_Position = vec4(0, 0, 0, 1);
-  gl_PointSize = canvasDimensions.x * 2.0;
+  gl_Position = vec4(position, 0, 1);
+}
+`
+
+const CLEAR_CANVAS_VS = `#version 300 es
+
+in vec2 position;
+
+void main() {
+  gl_Position = vec4(position, 0, 1);
 }
 `
