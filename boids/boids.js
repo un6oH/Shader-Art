@@ -22,6 +22,7 @@ function main() {
     mouseAvoidanceF: 0.5, 
     aoiRadius: 50, 
     boidSize: 10, 
+    trailLength: 0, 
   };
 
   const resetButton = document.querySelector("#reset");
@@ -35,6 +36,7 @@ function main() {
     cohesionF: document.querySelector("#cohesionF"),
     mouseAvoidanceF: document.querySelector("#mouseAvoidanceF"), 
     aoiRadius: document.querySelector("#aoiRadius"),
+    trailLength: document.querySelector("#trailLength"), 
   };
   const outputs = {
     separationF: document.querySelector("#separationFValue"), 
@@ -480,8 +482,8 @@ function main() {
     }
 
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    // gl.blendEquation(gl.FUNC_ADD);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ZERO, gl.ONE);
+    gl.blendEquation(gl.FUNC_REVERSE_SUBTRACT);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, outputFramebuffer);
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -490,7 +492,8 @@ function main() {
     gl.useProgram(clearCanvasProgram);
     gl.bindVertexArray(clearCanvasVertexArray);
     gl.uniform1f(clearCanvasLocations.canvasWidth, canvas.width);
-    gl.uniform4f(clearCanvasLocations.clearColour, 0, 0, 0, 0.11);
+    let fadeStrength = 1 / (params.trailLength + 1);
+    gl.uniform4f(clearCanvasLocations.clearColour, fadeStrength, fadeStrength, fadeStrength, 1);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     
     gl.disable(gl.BLEND);
