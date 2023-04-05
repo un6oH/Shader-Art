@@ -9,8 +9,8 @@
   "bodies": [
     {
       "mass": 1, 
-      "initialPosition": [0, 0], 
-      "initialVelocity": [1, 0], 
+      "position": [0, 0], 
+      "velocity": [1, 0], 
       "size": 20, 
       "colour": [255, 0, 0]
     }
