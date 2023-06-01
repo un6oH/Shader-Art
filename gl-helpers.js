@@ -29,12 +29,25 @@ function createProgram(gl, vertexShaderSource, fragmentShaderSource, transformFe
   gl.deleteProgram(program);
 }
 
-function createTexture(gl) {
+function createLocations(gl, program, attributes, uniforms) {
+  let locations = {};
+  attributes.forEach((name) => {
+    locations[name] = gl.getAttribLocations(program, name);
+  });
+  uniforms.forEach((name) => {
+    locations[name] = gl.getUniformLocations(program, name);
+  });
+  return locations;
+}
+
+function createTexture(gl, wrapS, wrapT) {
   let texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
 
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrapS);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrapT);
 
   return texture;
 }
@@ -46,11 +59,16 @@ function createFramebuffer(gl, texture) {
   return framebuffer;
 }
 
-function makeBuffer(gl, data, usage) {
+function makeBuffer(gl, data, usage, buffer = null) {
   const buffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
   gl.bufferData(gl.ARRAY_BUFFER, data, usage);
   return buffer;
+}
+
+function setupBuffer(gl, buffer, data, usage) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, data, usage);
 }
 
 function makeVertexArray(gl, buffers) {
