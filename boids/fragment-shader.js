@@ -69,7 +69,7 @@ void main() {
   // if (v.z != 0.) {
   //   v.xy /= v.z * 60.0;
   // }
-  colour = value;l
+  colour = value;
 }
 `
 
