@@ -331,9 +331,7 @@ void main() {
   float b = texture(groundHeightTexture, texCoord).x;
   float d = h - b;
 
-  // colour = hsla2rgba(vec4(2.0 / 3.0, d / 10.0, b / 10.0, 1));
-  // colour = vec4(vec3(b, h, d) / 10.0, 1);
-  // colour = vec4(b, b, b, 1);
-  colour = rgba(vec4(0, 0, b, 1));
+  // colour = rgba(vec4(2.0 / 3.0, d / scale, b / scale, 1));
+  
 }
 `;
