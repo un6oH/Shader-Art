@@ -13,7 +13,7 @@ void main() {
   vec2 clipSpace = normCoords * 2.0 - 1.0;
   gl_Position = vec4(clipSpace, 0, 1);
 
-  texCoord = vec2(0, 1) + normCoords * vec2(1, -1);
+  texCoord = normCoords;
 }
 `
 
@@ -32,7 +32,7 @@ void main() {
   vec2 clipSpace = normCoords * 2.0 - 1.0;
   gl_Position = vec4(clipSpace, 0, 1);
 
-  v_texCoord = 1.0 - normCoords * vec2(-1, 1);
+  v_texCoord = position;
 }
 `
 

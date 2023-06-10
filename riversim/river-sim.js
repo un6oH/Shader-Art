@@ -16,7 +16,7 @@ function main(sourceImages) {
   console.log("creating draw texture program");
   const drawTextureProgram = createProgram(gl, CANVAS_VS, DRAW_TEXTURE_FS);
   const drawTextureLocations = createLocations(gl, drawTextureProgram, ["position"], 
-  ["canvasDimensions", "source"]);
+  ["canvasDimensions", "source", "scale"]);
   
   console.log("creating set ground height program");
   const setGroundHeightProgram = createProgram(gl, TEXTURE_VS, SET_GROUND_HEIGHT_FS);
@@ -26,12 +26,12 @@ function main(sourceImages) {
   console.log("creating add sources program");
   const addSourcesProgram = createProgram(gl, TEXTURE_VS, ADD_SOURCES_FS);
   const addSourcesLocations = createLocations(gl, addSourcesProgram, ["position"], 
-  ["textureDimensions", "heightTexture", "heightn1Texture", "groundHeightTexture", "sourceTexture", "sourceHeight", "inputRate", "deltaTime"]);
+  ["textureDimensions", "heightTexture", "groundHeightTexture", "sourceTexture", "sourceHeight", "inputRate", "deltaTime"]);
   
   console.log("creating remove sinks program");
   const removeSinksProgram = createProgram(gl, TEXTURE_VS, ADD_SOURCES_FS);
   const removeSinksLocations = createLocations(gl, removeSinksProgram, ["position"], 
-  ["textureDimensions", "heightTexture", "heightn1Texture", "groundHeightTexture", "sinkTexture", "sinkHeight", "outputRate", "deltaTime"]);
+  ["textureDimensions", "heightTexture", "groundHeightTexture", "sinkTexture", "sinkHeight", "outputRate", "deltaTime"]);
 
   console.log("creating set depth program");
   const setDepthProgram = createProgram(gl, TEXTURE_VS, SET_DEPTH_FS);
@@ -69,34 +69,33 @@ function main(sourceImages) {
   ["textureDimensions", "heightTexture", "velocityTexture", "grav", "distance"]);
 
   console.log("creating render program");
-  const renderProgram = createProgram(gl, TEXTURE_VS, RENDER_FS);
+  const renderProgram = createProgram(gl, CANVAS_VS, RENDER_FS);
   const renderLocations = createLocations(gl, renderProgram, ["position"], 
-  ["textureDimensions", "heightTextuer", "groundHeightTexture"]);
+  ["canvasDimensions", "heightTexture", "groundHeightTexture", "scale"]);
 
   // initialise buffers
   const canvasCoordsBuffer = gl.createBuffer();
   const pixelCoordsBuffer = gl.createBuffer();
 
   // textures
-  const heightTextures = [createTexture(gl, [null, null, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]), createTexture(gl, [null, null, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE])];
-  const heightn1Textures = [createTexture(gl, [null, null, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]), createTexture(gl, [null, null, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE])];
-  const heightATexture = createTexture(gl, [null, null, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
-  const heightBTexture = createTexture(gl, [null, null, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
-  const groundHeightTexture = createTexture(gl, [null, null, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
-  const groundHeightSourceTexture = createTexture(gl, [null, null, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
-  const sourceTexture = createTexture(gl, [null, null, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
-  const sinkTexture = createTexture(gl, [null, null, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+  const heightTextures = [createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]), createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE])];
+  const heightn1Textures = [createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]), createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE])];
+  const solveHeightTextures = [createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]), createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE])];
+  const groundHeightTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+  const groundHeightSourceTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+  const sourceTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+  const sinkTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
 
-  const depthTexture = createTexture(gl, [null, null, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
-  const alphaTexture = createTexture(gl, [null, null, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
-  const betaTexture = createTexture(gl, [null, null, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
-  const depthSumTexture = createTexture(gl, [null, null, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
-  const velocityTexture = createTexture(gl, [null, null, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+  const depthTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+  const alphaTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+  const betaTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+  const depthSumTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+  const velocityTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
 
   // framebuffers
   const heightFramebuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
-  const heightAFramebuffer = gl.createFramebuffer();
-  const heightBFramebuffer = gl.createFramebuffer();
+  const heightn1Framebuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
+  const solveHeightFramebuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
   const groundHeightFramebuffer = gl.createFramebuffer();
   const depthFramebuffer = gl.createFramebuffer();
   const alphaFramebuffer = gl.createFramebuffer();
@@ -105,30 +104,27 @@ function main(sourceImages) {
   const velocityFramebuffer = gl.createFramebuffer();
 
   let heightStep = 0;
-  let currentIter = {
-    heightTexture: heightATexture, 
-    heightFramebuffer: heightBFramebuffer, 
-  }
-  let nextIter = {
-    heightTexture: heightBTexture, 
-    heightFramebuffer: heightAFramebuffer, 
-  }
 
   const simulation = {};
   function setSimulation() {
     // constants
     simulation.textureDimensions = [256, 256];
-    simulation.grav = 1;
-    simulation.distance = 1;
+    simulation.grav = 10;
+    simulation.distance = 0.05;
     simulation.damping = 0;
 
     simulation.heightScale = 10;
-    simulation.sourceHeight = 10;
+    simulation.sourceHeight = 15;
     simulation.sinkHeight = 0;
     simulation.inputRate = 1;
     simulation.outputRate = 1;
 
-    simulation.solveIterations = 20;
+    simulation.solveIterations = 40;
+    simulation.input = false;
+    simulation.output = false;
+
+    simulation.outputTexture = 0;
+    simulation.render = true;
 
     // buffers
     setupBuffer(gl, canvasCoordsBuffer, new Float32Array([
@@ -142,7 +138,7 @@ function main(sourceImages) {
     ]), gl.STATIC_DRAW);
 
     // set storage for 1D fields
-    [heightATexture, heightBTexture, groundHeightTexture, depthTexture, alphaTexture, betaTexture].forEach((texture) => {
+    [groundHeightTexture, depthTexture, alphaTexture, betaTexture].forEach((texture) => {
       gl.bindTexture(gl.TEXTURE_2D, texture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, simulation.textureDimensions[0], simulation.textureDimensions[1], 0, gl.RED, gl.FLOAT, null);
     });
@@ -160,40 +156,69 @@ function main(sourceImages) {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceImages[1]);
 
     gl.bindTexture(gl.TEXTURE_2D, sinkTexture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceImages[1]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceImages[2]);
 
     // bind textures to framebuffers
-    // height framebuffer
+    // height framebuffers
     for (let i = 0; i < 2; i++) {
       gl.bindTexture(gl.TEXTURE_2D, heightTextures[i]);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, simulation.textureDimensions[0], simulation.textureDimensions[1], 0, gl.RED, gl.FLOAT, null);
+      setupFramebuffer(gl, heightFramebuffers[i], heightTextures[i]);
+      gl.clearBufferfv(gl.COLOR, 0, new Float32Array([0, 0, 0, 0]));
+      
       gl.bindTexture(gl.TEXTURE_2D, heightn1Textures[i]);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, simulation.textureDimensions[0], simulation.textureDimensions[1], 0, gl.RED, gl.FLOAT, null);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, heightFramebuffers[i]);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, heightTextures[i], 0); 
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, heightn1Textures[i], 0); 
+      setupFramebuffer(gl, heightn1Framebuffers[i], heightn1Textures[i]);
       gl.clearBufferfv(gl.COLOR, 0, new Float32Array([0, 0, 0, 0]));
-      gl.clearBufferfv(gl.COLOR, 1, new Float32Array([0, 0, 0, 0]));
+
+      gl.bindTexture(gl.TEXTURE_2D, solveHeightTextures[i]);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, simulation.textureDimensions[0], simulation.textureDimensions[1], 0, gl.RED, gl.FLOAT, null);
+      setupFramebuffer(gl, solveHeightFramebuffers[i], solveHeightTextures[i]);
+      gl.clearBufferfv(gl.COLOR, 0, new Float32Array([0, 0, 0, 0]));
     }
 
     // other framebuffers
-    setupFramebuffer(gl, heightAFramebuffer, heightATexture);
-    setupFramebuffer(gl, heightBFramebuffer, heightBTexture);
     setupFramebuffer(gl, groundHeightFramebuffer, groundHeightTexture);
     setupFramebuffer(gl, depthFramebuffer, depthTexture);
     setupFramebuffer(gl, alphaFramebuffer, alphaTexture);
     setupFramebuffer(gl, betaFramebuffer, betaTexture);
     setupFramebuffer(gl, depthSumFramebuffer, depthSumTexture);
     setupFramebuffer(gl, velocityFramebuffer, velocityTexture);
+
+    setGroundHeightTexture();
+    step(0);
+
+    parameterInputs.forEach((input, i) => {
+      input.value = simulation[parameterNames[i]];
+    });
+    inputToggle.textContent = "Input: off";
+    outputToggle.textContent = "Output: off";
+
+    play = false;
+
+    console.log("setSimulation() initialised");
   }
 
-  function drawTexture(texture) {
+  function drawTexture() {
+    // console.log("drawTexture()");
     gl.useProgram(drawTextureProgram);
 
-    setVertexShaderVariables(drawTextureLocations, canvasCoordsBuffer, [canvas.width, canvas.height]);
-    gl.uniform1i(drawTextureLocations.source, 0);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, groundHeightSourceTexture);
+    setVertexShaderVariables(drawTextureLocations, false);
+
+    let texture = [
+      heightTextures[heightStep % 2], 
+      depthTexture, 
+      velocityTexture, 
+      alphaTexture, 
+      betaTexture, 
+      depthSumTexture, 
+      groundHeightTexture, 
+      sourceTexture, 
+      sinkTexture, 
+    ][simulation.outputTexture];
+    let scale = [10, 10, 10, 1, 10, 20, simulation.heightScale, 1, 1][simulation.outputTexture];
+    bindTextureToLocation(gl, drawTextureLocations.source, 0, texture);
+    gl.uniform1f(drawTextureLocations.scale, scale);
 
     setFramebuffer(gl, null, canvas.width, canvas.height);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -201,12 +226,11 @@ function main(sourceImages) {
   
   // create float ground height texture
   function setGroundHeightTexture() {
+    // console.log("setGroundHeightTexture()");
     gl.useProgram(setGroundHeightProgram);
 
-    setVertexShaderVariables(setGroundHeightLocations, pixelCoordsBuffer, simulation.textureDimensions);
-    gl.uniform1i(setGroundHeightLocations.groundHeightTexture, 0);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, groundHeightSourceTexture);
+    setVertexShaderVariables(setGroundHeightLocations, true);
+    bindTextureToLocation(gl, setGroundHeightLocations.groundHeightTexture, 0, groundHeightSourceTexture);
     gl.uniform1f(setGroundHeightLocations.scale, simulation.heightScale);
 
     setFramebuffer(gl, groundHeightFramebuffer, ...simulation.textureDimensions);
@@ -214,44 +238,54 @@ function main(sourceImages) {
   }
 
   function addSources(deltaTime) {
+    // console.log("addSources()");
     gl.useProgram(addSourcesProgram);
 
-    setVertexShaderVariables(addSourcesLocations, pixelCoordsBuffer, simulation.textureDimensions);
+    setVertexShaderVariables(addSourcesLocations, true);
     bindTextureToLocation(gl, addSourcesLocations.heightTexture, 0, heightTextures[heightStep % 2]);
-    bindTextureToLocation(gl, addSourcesLocations.heightn1Texture, 1, heightn1Textures[heightStep % 2]);
     bindTextureToLocation(gl, addSourcesLocations.groundHeightTexture, 2, groundHeightTexture);
     bindTextureToLocation(gl, addSourcesLocations.sourceTexture, 3, sourceTexture);
     gl.uniform1f(addSourcesLocations.sourceHeight, simulation.sourceHeight);
     gl.uniform1f(addSourcesLocations.inputRate, simulation.inputRate);
     gl.uniform1f(addSourcesLocations.deltaTime, deltaTime);
 
-    heightStep++;
-    setFramebuffer(gl, heightFramebuffers[heightStep % 2], ...simulation.textureDimensions);
+    setFramebuffer(gl, heightFramebuffers[(heightStep + 1) % 2], ...simulation.textureDimensions);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    bindTextureToLocation(gl, addSourcesLocations.heightTexture, 0, heightn1Textures[heightStep % 2]);
+    setFramebuffer(gl, heightn1Framebuffers[(heightStep + 1) % 2], ...simulation.textureDimensions);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    heightStep++;
   }
 
   function removeSinks(deltaTime) {
+    // console.log("removeSinks()");
     gl.useProgram(removeSinksProgram);
 
-    setVertexShaderVariables(removeSinksLocations, pixelCoordsBuffer, simulation.textureDimensions);
+    setVertexShaderVariables(removeSinksLocations, true);
     bindTextureToLocation(gl, removeSinksLocations.heightTexture, 0, heightTextures[heightStep % 2]);
-    bindTextureToLocation(gl, removeSinksLocations.heightn1Texture, 1, heightn1Textures[heightStep % 2]);
     bindTextureToLocation(gl, removeSinksLocations.groundHeightTexture, 2, groundHeightTexture);
     bindTextureToLocation(gl, removeSinksLocations.sourceTexture, 3, sourceTexture);
     gl.uniform1f(removeSinksLocations.sinkHeight, simulation.sinkHeight);
     gl.uniform1f(removeSinksLocations.outputRate, simulation.outputRate);
     gl.uniform1f(removeSinksLocations.deltaTime, deltaTime);
 
-    heightStep++;
-
-    setFramebuffer(gl, heightFramebuffers[heightStep % 2], ...simulation.textureDimensions);
+    setFramebuffer(gl, heightFramebuffers[(heightStep + 1) % 2], ...simulation.textureDimensions);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    bindTextureToLocation(gl, removeSinksLocations.heightTexture, 0, heightn1Textures[heightStep % 2]);
+    setFramebuffer(gl, heightn1Framebuffers[(heightStep + 1) % 2], ...simulation.textureDimensions);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    heightStep++;
   }
 
   function setDepth() {
+    // console.log("setDepth()");
     gl.useProgram(setDepthProgram);
 
-    setVertexShaderVariables(setDepth, pixelCoordsBuffer, simulation.textureDimensions);
+    setVertexShaderVariables(setDepthLocations, true);
     bindTextureToLocation(gl, setDepthLocations.heightTexture, 0, heightTextures[heightStep % 2]);
     bindTextureToLocation(gl, setDepthLocations.groundHeightTexture, 1, groundHeightTexture);
 
@@ -260,9 +294,10 @@ function main(sourceImages) {
   }
 
   function setAlpha(deltaTime) {
+    // console.log("setAlpha()");
     gl.useProgram(setAlphaProgram);
 
-    setVertexShaderVariables(setAlphaLocations, pixelCoordsBuffer, simulation.textureDimensions);
+    setVertexShaderVariables(setAlphaLocations, true);
     bindTextureToLocation(gl, setAlphaLocations.depthTexture, 0, depthTexture);
     gl.uniform1f(setAlphaLocations.grav, simulation.grav);
     gl.uniform1f(setAlphaLocations.deltaTime, deltaTime);
@@ -273,9 +308,10 @@ function main(sourceImages) {
   }
 
   function setBeta() {
+    // console.log("setBeta()");
     gl.useProgram(setBetaProgram);
 
-    setVertexShaderVariables(setBetaLocations, pixelCoordsBuffer, simulation.textureDimensions);
+    setVertexShaderVariables(setBetaLocations, true);
     bindTextureToLocation(gl, setBetaLocations.heightn1Texture, 0, heightTextures[heightStep % 2]);
     bindTextureToLocation(gl, setBetaLocations.heightn2Texture, 1, heightn1Textures[heightStep % 2]);
     gl.uniform1f(setBetaLocations.damping, simulation.damping);
@@ -285,9 +321,10 @@ function main(sourceImages) {
   }
 
   function setDepthSum() {
+    // console.log("setDepthSum()");
     gl.useProgram(setDepthSumProgram);
 
-    setVertexShaderVariables(setDepthSumLocations, pixelCoordsBuffer, simulation.textureDimensions);
+    setVertexShaderVariables(setDepthSumLocations, true);
     bindTextureToLocation(gl, setDepthSumLocations.depthTexture, 0, depthTexture);
 
     setFramebuffer(gl, depthSumFramebuffer, ...simulation.textureDimensions);
@@ -295,77 +332,77 @@ function main(sourceImages) {
   }
 
   function solveHeight(deltaTime) {
+    // console.log("solveHeight()");
     gl.useProgram(solveHeightProgram);
 
-    setVertexShaderVariables(solveHeightLocations, pixelCoordsBuffer, simulation.textureDimensions);
+    setVertexShaderVariables(solveHeightLocations, true);
     
     gl.bindFramebuffer(gl.FRAMEBUFFER, heightFramebuffers[heightStep % 2]);
-    gl.bindTexture(gl.TEXTURE_2D, heightATexture);
+    gl.bindTexture(gl.TEXTURE_2D, solveHeightTextures[0]);
     gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RED, 0, 0, ...simulation.textureDimensions, 0);
-    gl.bindTexture(gl.TEXTURE_2D, heightBTexture);
+    gl.bindTexture(gl.TEXTURE_2D, solveHeightTextures[1]);
     gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RED, 0, 0, ...simulation.textureDimensions, 0);
 
     bindTextureToLocation(gl, solveHeightLocations.alphaTexture, 0, alphaTexture);
     bindTextureToLocation(gl, solveHeightLocations.betaTexture, 1, betaTexture);
     bindTextureToLocation(gl, solveHeightLocations.depthSumTexture, 3, depthSumTexture);
-    let gamma = simulation.grav * (deltaTime**2) / (2 * simulation.distance**2);
+    let gamma = simulation.grav * (deltaTime**2) / (4 * simulation.distance**2);
     gl.uniform1f(solveHeightLocations.gamma, gamma);
 
     for (let i = 0; i < simulation.solveIterations; ++i) {
-      bindTextureToLocation(gl, solveHeightLocations.heightTexture, 2, currentIter.heightTexture);
+      bindTextureToLocation(gl, solveHeightLocations.heightTexture, 2, solveHeightTextures[i % 2]);
 
-      setFramebuffer(gl, currentIter.heightFramebuffer, ...simulation.textureDimensions);
+      setFramebuffer(gl, solveHeightFramebuffers[(i + 1) % 2], ...simulation.textureDimensions);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-      let temp = currentIter;
-      currentIter = nextIter;
-      nextIter = currentIter;
     }
   }
 
   function incHeight() {
-    gl.useProgram(updateHeightProgram);
+    // console.log("incHeight()");
+    gl.bindFramebuffer(gl.FRAMEBUFFER, solveHeightFramebuffers[simulation.solveIterations % 2]);
+    gl.bindTexture(gl.TEXTURE_2D, heightTextures[(heightStep + 1) % 2]);
+    gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RED, 0, 0, ...simulation.textureDimensions, 0);
 
-    setVertexShaderVariables(updateHeightLocations, pixelCoordsBuffer, simulation.textureDimensions);
-    bindTextureToLocation(gl, updateHeightLocations.newHeightTexture, 0, nextIter.heightTexture);
-    bindTextureToLocation(gl, updateHeightLocations.heightTexture, 1, heightTextures[heightStep % 2]);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, heightFramebuffers[heightStep % 2]);
+    gl.bindTexture(gl.TEXTURE_2D, heightn1Textures[(heightStep + 1) % 2]);
+    gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RED, 0, 0, ...simulation.textureDimensions, 0);
 
     heightStep++;
-
-    setFramebuffer(gl, heightFramebuffers[heightStep % 2]);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
   function updateHeight(deltaTime) {
-    // addSources(deltaTime);
-    // removeSinks(deltaTime);
+    if (simulation.input) addSources(deltaTime);
+    if (simulation.output) removeSinks(deltaTime);
     setDepth();
-    // setAlpha(deltaTime);
-    // setBeta();
-    // setDepthSum();
-    // solveHeight(deltaTime);
-    // incHeight();
+    setAlpha(deltaTime);
+    setBeta();
+    setDepthSum();
+    solveHeight(deltaTime);
+    incHeight();
   }
   
   function render() {
     gl.useProgram(renderProgram);
 
-    setVertexShaderVariables(renderLocations, canvasCoordsBuffer, [canvas.width, canvas.height]);
+    setVertexShaderVariables(renderLocations, false);
     bindTextureToLocation(gl, renderProgram.heightTexture, 0, heightTextures[heightStep % 2]);
     bindTextureToLocation(gl, renderProgram.groundHeightTexture, 0, groundHeightTexture);
+    gl.uniform1f(renderLocations.scale, simulation.heightScale);
 
     setFramebuffer(gl, null, canvas.width, canvas.height);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
   function step(deltaTime) {
     updateHeight(deltaTime);
-    drawTexture(groundHeightTexture);
+    if (simulation.render) {
+      render();
+    } else {
+      drawTexture();
+    }
   }
-  
-  setSimulation();
-  setGroundHeightTexture();
-  step(0.05);
 
   let then = 0
   function loop(time) {
@@ -376,8 +413,8 @@ function main(sourceImages) {
     let deltaTime = time - then;
     then = time;
 
-    // step(deltaTime * 0.001);
-    step(0.05);
+    console.log("loop() step");
+    step(deltaTime * 0.001);
     
     requestAnimationFrame(loop);
   }
@@ -394,23 +431,104 @@ function main(sourceImages) {
   }
 
   function keyPress(event) {
-    if (event.key == ' ') {
-      playPause();
-    } else if (event.key == 'Enter') {
-      showHideSettings();
+    switch(event.key) {
+      case ' ':
+        playPause();
+        break;
+      case "Enter":
+        console.log("single step");
+        step(1 / 60);
+        break;
+      default:
+
     }
   }
 
-  document.addEventListener("keypress", keyPress);
-  
-
-  function setVertexShaderVariables(locations, buffer, dimensions) {
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  function setVertexShaderVariables(locations, texture) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, texture ? pixelCoordsBuffer : canvasCoordsBuffer);
     gl.enableVertexAttribArray(locations.position);
     gl.vertexAttribPointer(locations.position, 2, gl.FLOAT, false, 0, 0);
 
-    gl.uniform2fv(locations.textureDimensions, new Float32Array(dimensions));
+    if (texture) {
+      gl.uniform2fv(locations.textureDimensions, simulation.textureDimensions);
+    } else {
+      gl.uniform2f(locations.canvasDimensions, canvas.width, canvas.height);
+    }
   }
+
+  // GUI
+  // buttons
+  const resetButton = document.querySelector("#reset-button");
+  resetButton.addEventListener("click", setSimulation);
+  const inputToggle = document.querySelector("#input-toggle");
+  inputToggle.addEventListener("click", () => {
+    simulation.input = !simulation.input;
+    inputToggle.textContent = "Input: " + (simulation.input ? "on" : "off");
+  })
+  const outputToggle = document.querySelector("#output-toggle");
+  outputToggle.addEventListener("click", () => {
+    simulation.output = !simulation.output;
+    outputToggle.textContent = "Output: " + (simulation.output ? "on" : "off");
+  })
+  // output selector
+  const textureSelect = document.querySelector("#texture-select");
+  const textureDict = {
+    height: 0, 
+    depth: 1, 
+    velocity: 2, 
+    alpha: 3, 
+    beta: 4, 
+    depthsum: 5, 
+    ground: 6, 
+    sources: 7, 
+    sinks: 8, 
+  };
+  textureSelect.addEventListener("input", event => {
+    let value = textureSelect.value;
+    if (textureSelect.value == "render") {
+      simulation.render = true;
+      render();
+      return;
+    } 
+    simulation.render = false;
+    simulation.outputTexture = textureDict[value];
+    drawTexture();
+  })
+
+  // parameter container
+  const parameterContainer = document.querySelector("#parameter-container");
+  const parameterNames = [
+    "grav", 
+    "distance", 
+    "damping", 
+    "heightScale", 
+    "sourceHeight", 
+    "sinkHeight", 
+    "inputRate",
+    "outputRate", 
+  ];
+  const parameterSteps = [0.1, 0.05, 0.00001, 1, 1, 1, 0.1, 0.1];
+  for (let i = 0; i < parameterNames.length; i++) {
+    let p = document.createElement("p");
+    p.appendChild(document.createTextNode(parameterNames[i]));
+    parameterContainer.appendChild(p);
+
+    let input = document.createElement("input");
+    input.id = parameterNames[i];
+    input.step = parameterSteps[i];
+    input.type = "number";
+    parameterContainer.appendChild(input);
+  }
+  const parameterInputs = new Array(8).fill(0).map((v, i) => document.getElementById(parameterNames[i]));
+  parameterInputs.forEach((input, i) => {
+    input.addEventListener("input", event => {
+      simulation[parameterNames[i]] = parseFloat(event.data);
+    });
+  });
+
+  document.addEventListener("keypress", keyPress);
+
+  setSimulation();
 }
 
 

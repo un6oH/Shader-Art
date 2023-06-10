@@ -15,6 +15,18 @@
         height: 100vh;
         position: fixed;
       }
+
+      #parameter-container {
+        margin: 1ch;
+        color: white;
+        position: fixed;
+        font-family: sans-serif;
+        z-index: 1;
+      }
+
+      p {
+        margin: 0px;
+      }
     </style>
     <link rel="icon" type="image/bmp" href="../favicon.bmp" />
 
@@ -29,6 +41,25 @@
 
   <body>
     <canvas id="gl-canvas"></canvas>
+    <div id="parameter-container">
+      <button id="reset-button">Reset</button>
+      <button id="input-toggle">Input: off</button>
+      <button id="output-toggle">Output: off</button>
+      <br />
+      <label for="texture-select">Display output: </label>
+      <select name="texture-select" id="texture-select">
+        <option value="render">Render</option>
+        <option value="height">Height</option>
+        <option value="depth">Depth</option>
+        <option value="velocity">Velocity</option>
+        <option value="alpha">Alpha</option>
+        <option value="beta">Beta</option>
+        <option value="depthsum">Depth sum</option>
+        <option value="ground">Ground</option>
+        <option value="sources">Sources</option>
+        <option value="sinks">Sinks</option>
+      </select>
+    </div>
   </body>
 
   <script src="river-sim.js"></script>
