@@ -47,6 +47,7 @@ in vec2 v_texCoord;
 uniform sampler2D heightTexture;
 uniform sampler2D groundHeightTexture;
 uniform sampler2D sourceTexture;
+uniform sampler2D depthTexture;
 uniform float sourceHeight;
 uniform float inputRate;
 uniform float deltaTime;
@@ -59,15 +60,19 @@ void main() {
   float h = texelFetch(heightTexture, texCoord, 0).x;
   float b = texelFetch(groundHeightTexture, texCoord, 0).x;
   bool isSource = texelFetch(sourceTexture, texCoord, 0).x != 0.0;
+  float d = texelFetch(heightTexture, texCoord, 0).x;
+  // float h = b + d;
 
-  float d = h - b;
-
-  if (!isSource || sourceHeight < h || sourceHeight < b) {
+  // if (!isSource || sourceHeight < b + d || sourceHeight < b) {
+  //   height = h;
+  //   return;
+  // }
+  if (!isSource || h > sourceHeight) {
     height = h;
     return;
   }
 
-  height = min(h + inputRate * deltaTime, sourceHeight);
+  height = b + d + inputRate * deltaTime;
 }
 `;
 
@@ -80,6 +85,7 @@ in vec2 v_texCoord;
 uniform sampler2D heightTexture;
 uniform sampler2D groundHeightTexture;
 uniform sampler2D sinkTexture;
+uniform sampler2D depthTexture;
 uniform float sinkHeight;
 uniform float outputRate;
 uniform float deltaTime;
@@ -92,15 +98,15 @@ void main() {
   float h = texelFetch(heightTexture, texCoord, 0).x;
   float b = texelFetch(groundHeightTexture, texCoord, 0).x;
   bool isSink = texelFetch(sinkTexture, texCoord, 0).x != 0.0;
+  float d = texelFetch(depthTexture, texCoord, 0).x;
+  // float h = b + d;
 
-  float d = h - b;
-
-  if (!isSink || sinkHeight > h || sinkHeight < b) {
+  if (!isSink || sinkHeight > b + d || sinkHeight < b) {
     height = h;
     return;
   }
 
-  height = max(h - outputRate * deltaTime, max(sinkHeight, b));
+  height = max(h - outputRate * deltaTime, sinkHeight);
 }
 `;
 
@@ -131,7 +137,7 @@ in vec2 v_texCoord;
 uniform sampler2D depthTexture; // R32F texture
 uniform float grav; // gravity
 uniform float deltaTime;
-uniform float distance;
+uniform float unit;
 uniform vec2 textureDimensions;
 
 out float alpha; // alphaTexture
@@ -152,7 +158,7 @@ void main() {
   float dt = texture(depthTexture, texCoord + vec2(0, -1) * onePixel).x;
   float db = texture(depthTexture, texCoord + vec2(0,  1) * onePixel).x;
 
-  float alphainv = 1.0 + grav * pow(deltaTime / distance, 2.0) * 0.25 * (4.0*dc + dl + dr + dt + db);
+  float alphainv = 1.0 + grav * pow(deltaTime / unit, 2.0) * 0.25 * (4.0*dc + dl + dr + dt + db);
   alpha = 1.0 / alphainv;
 }
 `;
@@ -283,7 +289,7 @@ in vec2 v_texCoord;
 uniform sampler2D heightTexture;
 uniform sampler2D velocityTexture;
 uniform float grav;
-uniform float distance;
+uniform float unit;
 
 out vec2 newVel;
 
@@ -294,7 +300,7 @@ void main() {
   float hr = texelFetchOffset(heightTexture, texCoord, 0, ivec2(1, 0)).x;
   float hb = texelFetchOffset(heightTexture, texCoord, 0, ivec2(0, 1)).x;
 
-  vec2 acc = -grav / distance * vec2(hr - hc, hb - hc);
+  vec2 acc = -grav / unit * vec2(hr - hc, hb - hc);
 
   vec2 vel = texelFetch(velocityTexture, texCoord, 0).xy;
   newVel = vel + acc;
@@ -309,6 +315,7 @@ in vec2 texCoord;
 
 uniform sampler2D heightTexture;
 uniform sampler2D groundHeightTexture;
+uniform sampler2D normalMapTexture;
 uniform float scale;
 
 out vec4 colour;
@@ -329,9 +336,40 @@ vec4 rgba(vec4 hsla) {
 void main() {
   float h = texture(heightTexture, texCoord).x;
   float b = texture(groundHeightTexture, texCoord).x;
-  float d = h - b;
+  float d = max(h - b, 0.0);
 
-  // colour = rgba(vec4(2.0 / 3.0, d / scale, b / scale, 1));
-  
+  // vec4 base = vec4(100.0 / 255, 150.0 / 255.0, 90.0 / 255.0, 1);
+  // vec4 water = vec4
+  vec3 normal = texture(normalMapTexture, texCoord).xyz;
+  float light = dot(normal, vec3(-1, -1, -1)) - 0.5;
+  colour = rgba(vec4(2.0 / 3.0, d / scale, light, 1));
 }
 `;
+
+const SET_NORMAL_MAP_FS = 
+`#version 300 es
+precision highp float;
+
+in vec2 v_texCoord;
+
+uniform vec2 textureDimensions;
+uniform sampler2D groundHeightTexture;
+uniform float unit;
+
+out vec4 normal;
+
+void main() {
+  vec2 onePixel = 1.0 / textureDimensions;
+  vec2 texCoord = v_texCoord * onePixel;
+
+  float hl = texture(groundHeightTexture, texCoord - onePixel * vec2(-1, 0)).x * unit;
+  float hr = texture(groundHeightTexture, texCoord - onePixel * vec2( 1, 0)).x * unit;
+  float ht = texture(groundHeightTexture, texCoord - onePixel * vec2(0, -1)).x * unit;
+  float hb = texture(groundHeightTexture, texCoord - onePixel * vec2(0,  1)).x * unit;
+
+  vec2 position = v_texCoord * unit;
+  vec3 u = vec3(2.0 * unit, 0, hr - hl);
+  vec3 v = vec3(0, 2.0 * unit, hb - ht);
+  normal = vec4(normalize(cross(v, u)), 1);
+}
+`

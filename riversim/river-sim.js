@@ -26,12 +26,12 @@ function main(sourceImages) {
   console.log("creating add sources program");
   const addSourcesProgram = createProgram(gl, TEXTURE_VS, ADD_SOURCES_FS);
   const addSourcesLocations = createLocations(gl, addSourcesProgram, ["position"], 
-  ["textureDimensions", "heightTexture", "groundHeightTexture", "sourceTexture", "sourceHeight", "inputRate", "deltaTime"]);
+  ["textureDimensions", "heightTexture", "groundHeightTexture", "sourceTexture", "depthTexture", "sourceHeight", "inputRate", "deltaTime"]);
   
   console.log("creating remove sinks program");
   const removeSinksProgram = createProgram(gl, TEXTURE_VS, ADD_SOURCES_FS);
   const removeSinksLocations = createLocations(gl, removeSinksProgram, ["position"], 
-  ["textureDimensions", "heightTexture", "groundHeightTexture", "sinkTexture", "sinkHeight", "outputRate", "deltaTime"]);
+  ["textureDimensions", "heightTexture", "groundHeightTexture", "sinkTexture", "depthTexture", "sinkHeight", "outputRate", "deltaTime"]);
 
   console.log("creating set depth program");
   const setDepthProgram = createProgram(gl, TEXTURE_VS, SET_DEPTH_FS);
@@ -41,7 +41,7 @@ function main(sourceImages) {
   console.log("creating set alpha program");
   const setAlphaProgram = createProgram(gl, TEXTURE_VS, SET_ALPHA_FS);
   const setAlphaLocations = createLocations(gl, setAlphaProgram, ["position"], 
-  ["textureDimensions", "depthTexture", "grav", "deltaTime", "distance"]);
+  ["textureDimensions", "depthTexture", "grav", "deltaTime", "unit"]);
 
   console.log("creating set beta program");
   const setBetaProgram = createProgram(gl, TEXTURE_VS, SET_BETA_FS);
@@ -66,12 +66,17 @@ function main(sourceImages) {
   console.log("creating update velocity program");
   const updateVelocityProgram = createProgram(gl, TEXTURE_VS, UPDATE_VELOCITY_FS);
   const updateVelocityLocations = createLocations(gl, updateVelocityProgram, ["position"], 
-  ["textureDimensions", "heightTexture", "velocityTexture", "grav", "distance"]);
+  ["textureDimensions", "heightTexture", "velocityTexture", "grav", "unit"]);
 
   console.log("creating render program");
   const renderProgram = createProgram(gl, CANVAS_VS, RENDER_FS);
   const renderLocations = createLocations(gl, renderProgram, ["position"], 
-  ["canvasDimensions", "heightTexture", "groundHeightTexture", "scale"]);
+  ["canvasDimensions", "heightTexture", "groundHeightTexture", "normalMapTexture", "scale"]);
+
+  console.log("creating set normal map program");
+  const setNormalMapProgram = createProgram(gl, TEXTURE_VS, SET_NORMAL_MAP_FS);
+  const setNormalMapLocations = createLocations(gl, setNormalMapProgram, ["position"], 
+  ["textureDimensions", "heightTexture", "unit"]);
 
   // initialise buffers
   const canvasCoordsBuffer = gl.createBuffer();
@@ -92,6 +97,8 @@ function main(sourceImages) {
   const depthSumTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
   const velocityTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
 
+  const normalMapTexture = createTexture(gl, [gl.LINEAR, gl.LINEAR, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+
   // framebuffers
   const heightFramebuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
   const heightn1Framebuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
@@ -102,29 +109,77 @@ function main(sourceImages) {
   const betaFramebuffer = gl.createFramebuffer();
   const depthSumFramebuffer = gl.createFramebuffer();
   const velocityFramebuffer = gl.createFramebuffer();
+  const normalMapFramebuffer = gl.createFramebuffer();
 
   let heightStep = 0;
 
-  const simulation = {};
-  function setSimulation() {
-    // constants
-    simulation.textureDimensions = [256, 256];
-    simulation.grav = 10;
-    simulation.distance = 0.05;
-    simulation.damping = 0;
+  // parameter container
+  const parameterContainer = document.querySelector("#parameter-container");
+  const parameterNames = [
+    "grav", 
+    "unit", 
+    "damping", 
+    "heightScale", 
+    "sourceHeight", 
+    "sinkHeight", 
+    "inputRate",
+    "outputRate", 
+  ];
+  const parameterSteps = [
+    0.1, 
+    0.01, 
+    0.00001, 
+    1, 
+    1, 
+    1, 
+    0.1, 
+    0.1
+  ];
+  const parameterDefaults = [
+    10, 
+    0.4, 
+    0, 
+    20, 
+    20, 
+    0, 
+    1, 
+    1
+  ];
+  for (let i = 0; i < parameterNames.length; i++) {
+    let p = document.createElement("p");
+    p.appendChild(document.createTextNode(parameterNames[i]));
+    parameterContainer.appendChild(p);
 
-    simulation.heightScale = 10;
-    simulation.sourceHeight = 15;
-    simulation.sinkHeight = 0;
-    simulation.inputRate = 1;
-    simulation.outputRate = 1;
+    let input = document.createElement("input");
+    input.id = parameterNames[i];
+    input.step = parameterSteps[i];
+    input.type = "number";
+    input.value = parameterDefaults[i];
+    parameterContainer.appendChild(input);
+  }
+  const parameterInputs = new Array(8).fill(0).map((v, i) => document.getElementById(parameterNames[i]));
+  parameterInputs.forEach((input, i) => {
+    input.addEventListener("input", event => {
+      simulation[parameterNames[i]] = parseFloat(event.data);
+    });
+  });
+
+  const simulation = {};
+  simulation.input = true;
+  simulation.output = true;
+  function setSimulation() {
+    simulation.textureDimensions = [sourceImages[0].naturalWidth, sourceImages[0].naturalHeight];
+
+    parameterInputs.forEach((input, i) => {
+      simulation[parameterNames[i]] = input.value;
+    });
+    inputToggle.textContent = "Input: " + (simulation.input ? "on" : "off");
+    outputToggle.textContent = "Output: " + (simulation.output ? "on" : "off");
 
     simulation.solveIterations = 40;
-    simulation.input = false;
-    simulation.output = false;
 
-    simulation.outputTexture = 0;
-    simulation.render = true;
+    simulation.outputTexture = textureDict[textureSelect.value];
+    simulation.render = textureSelect.value == "render";
 
     // buffers
     setupBuffer(gl, canvasCoordsBuffer, new Float32Array([
@@ -158,6 +213,10 @@ function main(sourceImages) {
     gl.bindTexture(gl.TEXTURE_2D, sinkTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceImages[2]);
 
+    // normal map
+    gl.bindTexture(gl.TEXTURE_2D, normalMapTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, ...simulation.textureDimensions, 0, gl.RGBA, gl.FLOAT, null);
+
     // bind textures to framebuffers
     // height framebuffers
     for (let i = 0; i < 2; i++) {
@@ -184,15 +243,11 @@ function main(sourceImages) {
     setupFramebuffer(gl, betaFramebuffer, betaTexture);
     setupFramebuffer(gl, depthSumFramebuffer, depthSumTexture);
     setupFramebuffer(gl, velocityFramebuffer, velocityTexture);
+    setupFramebuffer(gl, normalMapFramebuffer, normalMapTexture);
 
     setGroundHeightTexture();
+    setNormalMap();
     step(0);
-
-    parameterInputs.forEach((input, i) => {
-      input.value = simulation[parameterNames[i]];
-    });
-    inputToggle.textContent = "Input: off";
-    outputToggle.textContent = "Output: off";
 
     play = false;
 
@@ -215,8 +270,20 @@ function main(sourceImages) {
       groundHeightTexture, 
       sourceTexture, 
       sinkTexture, 
+      normalMapTexture, 
     ][simulation.outputTexture];
-    let scale = [10, 10, 10, 1, 10, 20, simulation.heightScale, 1, 1][simulation.outputTexture];
+    let scale = [
+      simulation.heightScale * 2, 
+      simulation.heightScale * 2, 
+      simulation.heightScale, 
+      1, 
+      simulation.heightScale * 2, 
+      simulation.heightScale * 2, 
+      simulation.heightScale, 
+      1, 
+      1, 
+      1
+    ][simulation.outputTexture];
     bindTextureToLocation(gl, drawTextureLocations.source, 0, texture);
     gl.uniform1f(drawTextureLocations.scale, scale);
 
@@ -243,8 +310,9 @@ function main(sourceImages) {
 
     setVertexShaderVariables(addSourcesLocations, true);
     bindTextureToLocation(gl, addSourcesLocations.heightTexture, 0, heightTextures[heightStep % 2]);
-    bindTextureToLocation(gl, addSourcesLocations.groundHeightTexture, 2, groundHeightTexture);
-    bindTextureToLocation(gl, addSourcesLocations.sourceTexture, 3, sourceTexture);
+    bindTextureToLocation(gl, addSourcesLocations.groundHeightTexture, 1, groundHeightTexture);
+    bindTextureToLocation(gl, addSourcesLocations.sourceTexture, 2, sourceTexture);
+    bindTextureToLocation(gl, addSourcesLocations.depthTexture, 3, depthTexture);
     gl.uniform1f(addSourcesLocations.sourceHeight, simulation.sourceHeight);
     gl.uniform1f(addSourcesLocations.inputRate, simulation.inputRate);
     gl.uniform1f(addSourcesLocations.deltaTime, deltaTime);
@@ -301,7 +369,7 @@ function main(sourceImages) {
     bindTextureToLocation(gl, setAlphaLocations.depthTexture, 0, depthTexture);
     gl.uniform1f(setAlphaLocations.grav, simulation.grav);
     gl.uniform1f(setAlphaLocations.deltaTime, deltaTime);
-    gl.uniform1f(setAlphaLocations.distance, simulation.distance);
+    gl.uniform1f(setAlphaLocations.unit, simulation.unit);
 
     setFramebuffer(gl, alphaFramebuffer, ...simulation.textureDimensions);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -346,7 +414,7 @@ function main(sourceImages) {
     bindTextureToLocation(gl, solveHeightLocations.alphaTexture, 0, alphaTexture);
     bindTextureToLocation(gl, solveHeightLocations.betaTexture, 1, betaTexture);
     bindTextureToLocation(gl, solveHeightLocations.depthSumTexture, 3, depthSumTexture);
-    let gamma = simulation.grav * (deltaTime**2) / (4 * simulation.distance**2);
+    let gamma = simulation.grav * (deltaTime**2) / (4 * simulation.unit**2);
     gl.uniform1f(solveHeightLocations.gamma, gamma);
 
     for (let i = 0; i < simulation.solveIterations; ++i) {
@@ -385,13 +453,25 @@ function main(sourceImages) {
     gl.useProgram(renderProgram);
 
     setVertexShaderVariables(renderLocations, false);
-    bindTextureToLocation(gl, renderProgram.heightTexture, 0, heightTextures[heightStep % 2]);
-    bindTextureToLocation(gl, renderProgram.groundHeightTexture, 0, groundHeightTexture);
+    bindTextureToLocation(gl, renderLocations.heightTexture, 0, heightTextures[heightStep % 2]);
+    bindTextureToLocation(gl, renderLocations.groundHeightTexture, 1, groundHeightTexture);
+    bindTextureToLocation(gl, renderLocations.normalMapTexture, 2, normalMapTexture);
     gl.uniform1f(renderLocations.scale, simulation.heightScale);
 
     setFramebuffer(gl, null, canvas.width, canvas.height);
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  function setNormalMap() {
+    gl.useProgram(setNormalMapProgram);
+
+    setVertexShaderVariables(setNormalMapLocations, true);
+    bindTextureToLocation(gl, setNormalMapLocations.groundHeightTexture, 0, groundHeightTexture);
+    gl.uniform1f(setNormalMapLocations.unit, simulation.unit);
+
+    setFramebuffer(gl, normalMapFramebuffer, ...simulation.textureDimensions);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
@@ -482,6 +562,7 @@ function main(sourceImages) {
     ground: 6, 
     sources: 7, 
     sinks: 8, 
+    normal: 9, 
   };
   textureSelect.addEventListener("input", event => {
     let value = textureSelect.value;
@@ -494,37 +575,6 @@ function main(sourceImages) {
     simulation.outputTexture = textureDict[value];
     drawTexture();
   })
-
-  // parameter container
-  const parameterContainer = document.querySelector("#parameter-container");
-  const parameterNames = [
-    "grav", 
-    "distance", 
-    "damping", 
-    "heightScale", 
-    "sourceHeight", 
-    "sinkHeight", 
-    "inputRate",
-    "outputRate", 
-  ];
-  const parameterSteps = [0.1, 0.05, 0.00001, 1, 1, 1, 0.1, 0.1];
-  for (let i = 0; i < parameterNames.length; i++) {
-    let p = document.createElement("p");
-    p.appendChild(document.createTextNode(parameterNames[i]));
-    parameterContainer.appendChild(p);
-
-    let input = document.createElement("input");
-    input.id = parameterNames[i];
-    input.step = parameterSteps[i];
-    input.type = "number";
-    parameterContainer.appendChild(input);
-  }
-  const parameterInputs = new Array(8).fill(0).map((v, i) => document.getElementById(parameterNames[i]));
-  parameterInputs.forEach((input, i) => {
-    input.addEventListener("input", event => {
-      simulation[parameterNames[i]] = parseFloat(event.data);
-    });
-  });
 
   document.addEventListener("keypress", keyPress);
 
