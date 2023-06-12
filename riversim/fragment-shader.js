@@ -7,6 +7,7 @@ in vec2 texCoord;
 uniform sampler2D source;
 uniform vec2 canvasDimensions;
 uniform float scale;
+uniform bool normalise;
 
 out vec4 colour;
 
@@ -16,7 +17,7 @@ void main() {
     colour = vec4(1, 0, 1, 1);
     return;
   } else {
-    colour = vec4(value.rgb / scale, 1);
+    colour = normalise ? vec4((value.rgb / scale) * 0.5 + 0.5, 1) : vec4(value.rgb / scale, 1);
   }
 }
 `;
@@ -60,14 +61,9 @@ void main() {
   float h = texelFetch(heightTexture, texCoord, 0).x;
   float b = texelFetch(groundHeightTexture, texCoord, 0).x;
   bool isSource = texelFetch(sourceTexture, texCoord, 0).x != 0.0;
-  float d = texelFetch(heightTexture, texCoord, 0).x;
-  // float h = b + d;
+  float d = texelFetch(depthTexture, texCoord, 0).x;
 
-  // if (!isSource || sourceHeight < b + d || sourceHeight < b) {
-  //   height = h;
-  //   return;
-  // }
-  if (!isSource || h > sourceHeight) {
+  if (!isSource || sourceHeight < h || sourceHeight < b) {
     height = h;
     return;
   }
@@ -106,7 +102,7 @@ void main() {
     return;
   }
 
-  height = max(h - outputRate * deltaTime, sinkHeight);
+  height = max(h - outputRate * deltaTime, 0.0);
 }
 `;
 
@@ -123,7 +119,9 @@ out float depth;
 
 void main() {
   ivec2 texCoord = ivec2(v_texCoord);
-  float d = texelFetch(heightTexture, texCoord, 0).x - texelFetch(groundHeightTexture, texCoord, 0).x;
+  float h = texelFetch(heightTexture, texCoord, 0).x;
+  float b = texelFetch(groundHeightTexture, texCoord, 0).x;
+  float d = h - b;
   depth = max(d, 0.0);
 }
 `;
@@ -147,18 +145,32 @@ void main() {
   vec2 onePixel = 1.0 / textureDimensions;
   vec2 texCoord = v_texCoord * onePixel;
 
-  // float dc = texelFetchOffset(depthTexture, texCoord, 0, ivec2(0, 0)).x;
-  // float dl = texelFetchOffset(depthTexture, texCoord, 0, ivec2(-1, 0)).x;
-  // float dr = texelFetchOffset(depthTexture, texCoord, 0, ivec2( 1, 0)).x;
-  // float dt = texelFetchOffset(depthTexture, texCoord, 0, ivec2(0, -1)).x;
-  // float db = texelFetchOffset(depthTexture, texCoord, 0, ivec2(0,  1)).x;
-  float dc = texture(depthTexture, texCoord + vec2(0, 0) * onePixel).x;
-  float dl = texture(depthTexture, texCoord + vec2(-1, 0) * onePixel).x;
-  float dr = texture(depthTexture, texCoord + vec2( 1, 0) * onePixel).x;
-  float dt = texture(depthTexture, texCoord + vec2(0, -1) * onePixel).x;
-  float db = texture(depthTexture, texCoord + vec2(0,  1) * onePixel).x;
+  float dc = texture(depthTexture, texCoord).x;
+  float dl = 0.0;
+  float dr = 0.0;
+  float dt = 0.0;
+  float db = 0.0;
 
-  float alphainv = 1.0 + grav * pow(deltaTime / unit, 2.0) * 0.25 * (4.0*dc + dl + dr + dt + db);
+  float n = 0.0;
+  if (texCoord.x > onePixel.x) {
+    dl = texture(depthTexture, texCoord + vec2(-1, 0) * onePixel).x;
+    n += 1.0;
+  } 
+  if (texCoord.x < textureDimensions.x - onePixel.x) {
+    dr = texture(depthTexture, texCoord + vec2( 1, 0) * onePixel).x;
+    n += 1.0;
+  }
+
+  if (texCoord.y > onePixel.y) {
+    dt = texture(depthTexture, texCoord + vec2(0, -1) * onePixel).x;
+    n += 1.0;
+  }
+  if (texCoord.y < textureDimensions.y - onePixel.y) {
+    db = texture(depthTexture, texCoord + vec2(0,  1) * onePixel).x;
+    n += 1.0;
+  }
+
+  float alphainv = 1.0 + grav * pow(deltaTime / unit, 2.0) * 0.25 * (n*dc + dl + dr + dt + db);
   alpha = 1.0 / alphainv;
 }
 `;
@@ -257,6 +269,20 @@ void main() {
     texture(depthSumTexture, texCoord + vec2(0, -1) * onePixel).y);
   vec2 sum1 = texture(depthSumTexture, texCoord).xy;
 
+  if (texCoord.x < onePixel.x) {
+    sum0.x = 0.0;
+  } 
+  if (texCoord.x > textureDimensions.x - onePixel.x) {
+    sum1.x = 0.0;
+  }
+
+  if (texCoord.y < onePixel.y) {
+    sum0.y = 0.0;
+  }
+  if (texCoord.y > textureDimensions.y - onePixel.y) {
+    sum1.y = 0.0;
+  }
+
   height = alpha * (beta + gamma*(hl*sum0.x + hr*sum1.x + ht*sum0.y + hb*sum1.y));
 }
 `;
@@ -290,6 +316,7 @@ uniform sampler2D heightTexture;
 uniform sampler2D velocityTexture;
 uniform float grav;
 uniform float unit;
+uniform float deltaTime;
 
 out vec2 newVel;
 
@@ -303,7 +330,7 @@ void main() {
   vec2 acc = -grav / unit * vec2(hr - hc, hb - hc);
 
   vec2 vel = texelFetch(velocityTexture, texCoord, 0).xy;
-  newVel = vel + acc;
+  newVel = acc;
 }
 `;
 
@@ -313,7 +340,7 @@ precision highp float;
 
 in vec2 texCoord;
 
-uniform sampler2D heightTexture;
+uniform sampler2D depthTexture;
 uniform sampler2D groundHeightTexture;
 uniform sampler2D normalMapTexture;
 uniform float scale;
@@ -334,9 +361,8 @@ vec4 rgba(vec4 hsla) {
 }
 
 void main() {
-  float h = texture(heightTexture, texCoord).x;
+  float d = texture(depthTexture, texCoord).x;
   float b = texture(groundHeightTexture, texCoord).x;
-  float d = max(h - b, 0.0);
 
   // vec4 base = vec4(100.0 / 255, 150.0 / 255.0, 90.0 / 255.0, 1);
   // vec4 water = vec4
