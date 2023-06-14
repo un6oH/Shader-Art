@@ -17,7 +17,7 @@ void main() {
     colour = vec4(1, 0, 1, 1);
     return;
   } else {
-    colour = normalise ? vec4((value.rgb / scale) * 0.5 + 0.5, 1) : vec4(value.rgb / scale, 1);
+    colour = normalise ? vec4((value.rgb / scale + 1.0) * 0.5, 1) : vec4(value.rgb / scale, 1);
   }
 }
 `;
@@ -97,7 +97,7 @@ void main() {
   float d = texelFetch(depthTexture, texCoord, 0).x;
   // float h = b + d;
 
-  if (!isSink || sinkHeight > b + d || sinkHeight < b) {
+  if (!isSink || sinkHeight > b + d) {
     height = h;
     return;
   }
@@ -328,9 +328,8 @@ void main() {
   float hb = texelFetchOffset(heightTexture, texCoord, 0, ivec2(0, 1)).x;
 
   vec2 acc = -grav / unit * vec2(hr - hc, hb - hc);
-
   vec2 vel = texelFetch(velocityTexture, texCoord, 0).xy;
-  newVel = acc;
+  newVel = vel + acc * deltaTime;
 }
 `;
 
