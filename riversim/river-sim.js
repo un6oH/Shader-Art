@@ -58,10 +58,25 @@ function main(sourceImages) {
   const solveHeightLocations = createLocations(gl, solveHeightProgram, ["position"], 
   ["textureDimensions", "alphaTexture", "betaTexture", "heightTexture", "depthSumTexture", "gamma"]);
 
-  console.log("creating update height program");
-  const updateHeightProgram = createProgram(gl, TEXTURE_VS, UPDATE_HEIGHT_FS);
-  const updateHeightLocations = createLocations(gl, updateHeightProgram, ["position"], 
-  ["textureDimensions", "newHeightTexture", "heightTexture"]);
+  console.log("creating calc excess volume program");
+  const calcExcessVolumeProgram = createProgram(gl, TEXTURE_VS, CALC_EXCESS_VOLUME_FS);
+  const calcExcessVolumeLocations = createLocations(gl, calcExcessVolumeProgram, ["position"], 
+  ["textureDimensions", "heightTexture", "heightn1Texture"]);
+
+  console.log("creating set connected volumes program");
+  const setConnectedVolumesProgram = createProgram(gl, TEXTURE_VS, SET_CONNECTED_VOLUMES_FS);
+  const setConnectedVolumesLocations = createLocations(gl, setConnectedVolumesProgram, ["position"], 
+  ["textureDimensions", "heightTexture", "groundHeightTexture"]);
+
+  console.log("creating propagate excess volume program");
+  const propagateExcessVolumeProgram = createProgram(gl, TEXTURE_VS, PROPAGATE_EXCESS_VOLUME_FS);
+  const propagateExcessVolumeLocations = createLocations(gl, propagateExcessVolumeProgram, ["position"], 
+  ["textureDimensions", "connectedVolumesTexture", "excessTexture", "weightOffset"]);
+
+  console.log("creating correct volume program");
+  const correctVolumeProgram = createProgram(gl, TEXTURE_VS, CORRECT_VOLUME_FS);
+  const correctVolumeLocations = createLocations(gl, correctVolumeProgram, ["position"], 
+  ["textureDimensions", "heightTexture", "excessTexture"]);
 
   console.log("creating update velocity program");
   const updateVelocityProgram = createProgram(gl, TEXTURE_VS, UPDATE_VELOCITY_FS);
@@ -97,6 +112,8 @@ function main(sourceImages) {
   const betaTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
   const depthSumTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
   const velocityTextures = [createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]), createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE])];
+  const excessVolumeTextures = [createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]), createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE])];
+  const connectedVolumesTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
 
   const normalMapTexture = createTexture(gl, [gl.LINEAR, gl.LINEAR, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
 
@@ -110,6 +127,8 @@ function main(sourceImages) {
   const betaFramebuffer = gl.createFramebuffer();
   const depthSumFramebuffer = gl.createFramebuffer();
   const velocityFramebuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
+  const excessVolumeFramebuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
+  const connectedVolumesFramebuffer = gl.createFramebuffer();
   const normalMapFramebuffer = gl.createFramebuffer();
 
   let heightStep = 0;
@@ -127,6 +146,7 @@ function main(sourceImages) {
     "inputRate",
     "outputRate", 
     "timeWarp", 
+    "weightOffset"
   ];
   const parameterAttributes = [ // default, step, min, max
     [10, 0.1, 0],
@@ -138,6 +158,7 @@ function main(sourceImages) {
     [1, 1, 0],
     [1, 1, 0],
     [1, 0.5, 0],
+    [0.0, 0.001, -1],
   ];
   
   for (let i = 0; i < parameterNames.length; i++) {
@@ -167,6 +188,7 @@ function main(sourceImages) {
   const simulation = {};
   simulation.input = true;
   simulation.output = true;
+  simulation.correctVolume = false;
 
   // GUI
   // buttons
@@ -182,6 +204,11 @@ function main(sourceImages) {
     simulation.output = !simulation.output;
     outputToggle.textContent = "Output: " + (simulation.output ? "on" : "off");
   })
+  const correctVolumeToggle = document.querySelector("#correct-volume-toggle");
+  correctVolumeToggle.addEventListener("click", () => {
+    simulation.correctVolume = !simulation.correctVolume;
+    correctVolumeToggle.textContent = "Correct volume: " + (simulation.correctVolume ? "on" : "off");
+  })
   // output selector
   const textureSelect = document.querySelector("#texture-select");
   const textureDict = {
@@ -195,6 +222,9 @@ function main(sourceImages) {
     sources: 7, 
     sinks: 8, 
     normal: 9, 
+    excess: 10, 
+    connected: 11, 
+    heightn1: 12, 
   };
   textureSelect.addEventListener("input", event => {
     let value = textureSelect.value;
@@ -219,7 +249,8 @@ function main(sourceImages) {
     inputToggle.textContent = "Input: " + (simulation.input ? "on" : "off");
     outputToggle.textContent = "Output: " + (simulation.output ? "on" : "off");
 
-    simulation.solveIterations = 60;
+    simulation.solveIterations = 20;
+    simulation.excessVolumePropagationRadius = 100;
 
     simulation.outputTexture = textureDict[textureSelect.value];
     simulation.render = textureSelect.value == "render";
@@ -247,6 +278,10 @@ function main(sourceImages) {
     // storage for depthSumTexture
     gl.bindTexture(gl.TEXTURE_2D, depthSumTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, simulation.textureDimensions[0], simulation.textureDimensions[1], 0, gl.RG, gl.FLOAT, null);
+
+    // storage for connectedVolumesTexture
+    gl.bindTexture(gl.TEXTURE_2D, connectedVolumesTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, simulation.textureDimensions[0], simulation.textureDimensions[1], 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
     // set storage for image input textures
     gl.bindTexture(gl.TEXTURE_2D, groundHeightSourceTexture)
@@ -284,6 +319,11 @@ function main(sourceImages) {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, simulation.textureDimensions[0], simulation.textureDimensions[1], 0, gl.RG, gl.FLOAT, null);
       setupFramebuffer(gl, velocityFramebuffers[i], velocityTextures[i]);
       gl.clearBufferfv(gl.COLOR, 0, new Float32Array([0, 0, 0, 0]));
+
+      gl.bindTexture(gl.TEXTURE_2D, excessVolumeTextures[i]);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, simulation.textureDimensions[0], simulation.textureDimensions[1], 0, gl.RED, gl.FLOAT, null);
+      setupFramebuffer(gl, excessVolumeFramebuffers[i], excessVolumeTextures[i]);
+      gl.clearBufferfv(gl.COLOR, 0, new Float32Array([0, 0, 0, 0]));
     }
 
     // other framebuffers
@@ -292,6 +332,7 @@ function main(sourceImages) {
     setupFramebuffer(gl, alphaFramebuffer, alphaTexture);
     setupFramebuffer(gl, betaFramebuffer, betaTexture);
     setupFramebuffer(gl, depthSumFramebuffer, depthSumTexture);
+    setupFramebuffer(gl, connectedVolumesFramebuffer, connectedVolumesTexture);
     setupFramebuffer(gl, normalMapFramebuffer, normalMapTexture);
 
     setGroundHeightTexture();
@@ -319,22 +360,30 @@ function main(sourceImages) {
       sourceTexture, 
       sinkTexture, 
       normalMapTexture, 
+      excessVolumeTextures[0], 
+      connectedVolumesTexture, 
+      heightn1Textures[heightStep % 2], 
     ][simulation.outputTexture];
-    let scale = [
-      simulation.heightScale * 2, 
-      simulation.heightScale * 2, 
-      1000, 
-      1, 
-      simulation.heightScale * 2, 
-      simulation.heightScale * 2, 
-      simulation.heightScale * 2, 
-      1, 
-      1, 
-      1, 
+    let props = [ // scale, zero-centred
+      // [simulation.heightScale * 2, false], 
+      // [simulation.heightScale * 2, false], 
+      [1, false], 
+      [1, false], 
+      [1000, true], 
+      [1, false], 
+      [simulation.heightScale * 2, false], 
+      [simulation.heightScale * 2, false], 
+      [simulation.heightScale * 2, false], 
+      [1, false], 
+      [1, false], 
+      [1, true], 
+      [0.01, true], 
+      [1, false], 
+      [simulation.heightScale * 2, false], 
     ][simulation.outputTexture];
     bindTextureToLocation(gl, drawTextureLocations.source, 0, texture);
-    gl.uniform1f(drawTextureLocations.scale, scale);
-    gl.uniform1f(drawTextureLocations.normalise, simulation.outputTexture == 2 || simulation.outputTexture == 9);
+    gl.uniform1f(drawTextureLocations.scale, props[0]);
+    gl.uniform1f(drawTextureLocations.normalise, props[1]);
 
     setFramebuffer(gl, null, canvas.width, canvas.height);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -491,9 +540,55 @@ function main(sourceImages) {
 
     heightStep++;
   }
+  
+  function correctVolume() {
+    gl.useProgram(calcExcessVolumeProgram);
+    setVertexShaderVariables(calcExcessVolumeLocations, true);
+    bindTextureToLocation(gl, calcExcessVolumeLocations.heightTexture, 0, heightTextures[heightStep % 2]);
+    bindTextureToLocation(gl, calcExcessVolumeLocations.heightn1Texture, 1, heightn1Textures[heightStep % 2]);
+    setFramebuffer(gl, excessVolumeFramebuffers[0], ...simulation.textureDimensions);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    // drawTexture();
+
+    gl.useProgram(setConnectedVolumesProgram);
+    setVertexShaderVariables(setConnectedVolumesLocations, true);
+    bindTextureToLocation(gl, setConnectedVolumesLocations.heightTexture, 0, heightTextures[heightStep % 2]);
+    bindTextureToLocation(gl, setConnectedVolumesLocations.groundHeightTexture, 1, groundHeightTexture);
+    setFramebuffer(gl, connectedVolumesFramebuffer, ...simulation.textureDimensions);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    
+    gl.useProgram(propagateExcessVolumeProgram);
+    setVertexShaderVariables(propagateExcessVolumeLocations, true);
+    bindTextureToLocation(gl, propagateExcessVolumeLocations.connectedVolumesTexture, 0, connectedVolumesTexture);
+    gl.uniform1f(propagateExcessVolumeLocations.weightOffset, simulation.weightOffset);
+    for (let i = 0; i < simulation.excessVolumePropagationRadius; i++) {
+      bindTextureToLocation(gl, propagateExcessVolumeLocations.excessTexture, 1, excessVolumeTextures[i % 2]);
+      setFramebuffer(gl, excessVolumeFramebuffers[(i + 1) % 2], ...simulation.textureDimensions);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+    
+    if (!simulation.correctVolume) return;
+
+    gl.useProgram(correctVolumeProgram);
+    setVertexShaderVariables(correctVolumeLocations, true);
+    bindTextureToLocation(gl, correctVolumeLocations.heightTexture, 0, heightTextures[heightStep % 2]);
+    bindTextureToLocation(gl, correctVolumeLocations.excessTexture, 1, excessVolumeTextures[simulation.excessVolumePropagationRadius % 2]);
+    setFramebuffer(gl, heightFramebuffers[(heightStep + 1) % 2], ...simulation.textureDimensions);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, heightn1Framebuffers[heightStep % 2]);
+    gl.bindTexture(gl.TEXTURE_2D, heightn1Textures[(heightStep + 1) % 2]);
+    gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 0, 0, ...simulation.textureDimensions);
+    // bindTextureToLocation(gl, correctVolumeLocations.heightTexture, 0, heightn1Textures[heightStep % 2]);
+    // setFramebuffer(gl, heightn1Framebuffers[(heightStep + 1) % 2], ...simulation.textureDimensions);
+    // gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    heightStep++;
+  }
 
   function updateHeight(deltaTime) {
-    console.log("updateHeight() deltaTime =", deltaTime);
+    // console.log("updateHeight() deltaTime =", deltaTime);
     if (simulation.input) addSources(deltaTime);
     if (simulation.output) removeSinks(deltaTime);
     setDepth();
@@ -502,6 +597,8 @@ function main(sourceImages) {
     setDepthSum();
     solveHeight(deltaTime);
     incHeight();
+    correctVolume();
+    setDepth();
   }
   
   function render() {
@@ -549,6 +646,7 @@ function main(sourceImages) {
   }
 
   function step(deltaTime) {
+    console.log("step() tick =", deltaTime.toPrecision(3), "dt =", (deltaTime * simulation.timeWarp).toPrecision(3));
     updateHeight(deltaTime * simulation.timeWarp);
     updateVelocity(deltaTime * simulation.timeWarp);
     if (simulation.render) {
@@ -561,7 +659,7 @@ function main(sourceImages) {
   let then = 0
   function loop(time) {
     if (!play) { 
-      console.log("-+- STOPPED LOOP -+-\n\n\n")
+      console.log("-+- STOPPED LOOP -+-\n\n")
       return;
     }
     let deltaTime = time - then;
@@ -576,7 +674,7 @@ function main(sourceImages) {
   function playPause() {
     play = !play;
     if (play) {
-      console.log("\n\n-+- STARTED LOOP -+-")
+      console.log("\n-+- STARTED LOOP -+-")
       let time = performance.now();
       then = time;
       loop(time);
@@ -585,11 +683,15 @@ function main(sourceImages) {
 
   function keyPress(event) {
     switch(event.key) {
-      case ' ':
+      case " ":
         playPause();
         break;
       case "Enter":
         step(1 / 60);
+        break;
+      case "c":
+        console.log("correctVolume()");
+        correctVolume();
         break;
       default:
 

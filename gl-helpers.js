@@ -9,7 +9,7 @@ function createShader(gl, type, source) {
   gl.deleteShader(shader);
 }
 
-function createProgram(gl, vertexShaderSource, fragmentShaderSource, transformFeedbackVaryings = null) {
+function createProgram(gl, vertexShaderSource, fragmentShaderSource, transformFeedbackVaryings = null, bufferMode = null) {
   let vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
   let fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
   
@@ -18,7 +18,7 @@ function createProgram(gl, vertexShaderSource, fragmentShaderSource, transformFe
   gl.attachShader(program, fragmentShader);
 
   if (transformFeedbackVaryings) {
-    gl.transformFeedbackVaryings(program, transformFeedbackVaryings, gl.SEPARATE_ATTRIBS);
+    gl.transformFeedbackVaryings(program, transformFeedbackVaryings, bufferMode ? bufferMode : gl.SEPARATE_ATTRIBS);
   }
 
   gl.linkProgram(program);
@@ -44,10 +44,11 @@ function createTexture(gl, params) {
   let texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
 
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, params[0] || gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, params[1] || gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, params[2] || wrapS);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, params[3] || wrapT);
+  let p = params ? params : [gl.LINEAR, gl.LINEAR, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE];
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, p[0]);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, p[1]);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, p[2]);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, p[3]);
 
   return texture;
 }
@@ -99,7 +100,17 @@ function makeTransformFeedback(gl, buffers) {
   buffers.forEach((buffer, index) => {
     gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, index, buffer);
   });
+  gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+  gl.bindBuffer(gl.ARRAY_BUFFER, null);
   return transformFeedback;
+}
+
+function drawWithTransformFeedback(gl, transformFeedback, primitive, drawFunction) {
+  gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, transformFeedback);
+  gl.beginTransformFeedback(primitive);
+  drawFunction();
+  gl.endTransformFeedback();
+  gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
 }
 
 function setFramebuffer(gl, framebuffer, width, height) { 

@@ -9,15 +9,15 @@ function main(image) {
   gl.getExtension('EXT_float_blend');
   gl.getExtension('OES_texture_float_linear');
 
-  canvas.width = image.naturalWidth;
-  canvas.height = image.naturalHeight;
+  canvas.width = gl.canvas.clientWidth;
+  canvas.height = gl.canvas.clientHeight;
   console.log("image dimensions", image.naturalWidth, "x", image.naturalHeight);
 
   console.log("creating set edges program");
   const setEdgesProgram = createProgram(gl, SET_EDGES_VS, FS, ["newX0", "newX1"]);
   const setEdgesLocations = createLocations(gl, setEdgesProgram, 
     ["prevX1", "y"], 
-    ["image", "textureWidth", "threshold"]);
+    ["image", "textureWidth", "threshold", "mode"]);
 
   console.log("creating set colour program");
   const setColourProgram = createProgram(gl, SET_COLOUR_VS, FS, ["colour"]);
@@ -128,7 +128,8 @@ function main(image) {
   ]), gl.STATIC_DRAW);
   const displayVertexArray = makeVertexArray(gl, [[displayVertexBuffer, displayLocations.position, 2, gl.FLOAT]]);
 
-
+  const LOCAL = 0;
+  const AGGREGATE = 1;
   function step(i) {
     console.log("step");
     gl.enable(gl.RASTERIZER_DISCARD);
@@ -139,6 +140,7 @@ function main(image) {
     bindTextureToLocation(gl, setEdgesLocations.image, 0, imageTexture);
     gl.uniform1f(setEdgesLocations.textureWidth, imageWidth);
     gl.uniform1f(setEdgesLocations.threshold, threshold);
+    gl.uniform1i(setEdgesLocations.mode, mode);
     drawWithTransformFeedback(gl, setEdgesTransformFeedbacks[i % 2], gl.POINTS, () => { gl.drawArrays(gl.POINTS, 0, n); });
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
@@ -171,7 +173,7 @@ function main(image) {
 
   function display() {
     gl.useProgram(displayProgram);
-    setFramebuffer(gl, null, canvas.width, canvas.height);
+    setFramebuffer(gl, null, image.naturalWidth, image.naturalHeight);
     gl.bindVertexArray(displayVertexArray);
     bindTextureToLocation(gl, displayLocations.image, 0, texture);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -184,12 +186,8 @@ function main(image) {
     console.log(label + ":", results);
   }
 
-  // let results = new Int32Array(n);
-  // gl.bindBuffer(gl.ARRAY_BUFFER, x1Buffers[0]);
-  // gl.getBufferSubData(gl.ARRAY_BUFFER, 0, results)
-  // console.log(results);
-
-  let threshold = 0.2;
+  let threshold = 0.1;
+  let mode = AGGREGATE;
 
   let j = 0;
   document.addEventListener("click", () => {
@@ -200,10 +198,11 @@ function main(image) {
   });
 
   let complete = false;
+  let x0 = new Float32Array(n);
   function checkComplete() {
-    let x0 = new Float32Array(n);
     gl.bindBuffer(gl.ARRAY_BUFFER, x0Buffer);
     gl.getBufferSubData(gl.ARRAY_BUFFER, 0, x0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
     complete = true;
     for (let n of x0) {
       if (n != image.naturalWidth) {
@@ -217,9 +216,28 @@ function main(image) {
     for (let s = 0; s < image.naturalWidth; s++) {
       step(s);
       checkComplete();
-      if (complete) break;
+      if (complete) {
+        console.log("shading complete");
+        break;
+      }
     }
     display();
+  }
+
+  function keyPress(event) {
+    switch(event.key) {
+      case " ":
+        full();
+        break;
+      case "ArrowUp":
+        break;
+      case "ArrowDown":
+        break;
+      case "ArrowRight":
+        break;
+      default:
+
+    }
   }
 
   document.addEventListener("keypress", full);
@@ -227,7 +245,7 @@ function main(image) {
 
 function setup() {
   let image = new Image();
-  image.src = "just grass.JPG"
+  image.src = "image.png"
   image.onload = () => {
     main(image);
   };

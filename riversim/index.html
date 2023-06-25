@@ -11,14 +11,14 @@
       }
 
       canvas {
-        width: 100vw;
+        width: 100vh;
         height: 100vh;
         position: fixed;
       }
 
       #parameter-container {
         margin: 1ch;
-        /* margin-left: 100vh; */
+        margin-left: 100vh;
         color: white;
         position: fixed;
         font-family: sans-serif;
@@ -46,6 +46,7 @@
       <button id="reset-button">Reset</button>
       <button id="input-toggle">Input: off</button>
       <button id="output-toggle">Output: off</button>
+      <button id="correct-volume-toggle">Correct volume: off</button>
       <br />
       <label for="texture-select">Display output: </label>
       <select name="texture-select" id="texture-select">
@@ -60,6 +61,9 @@
         <option value="sources">Sources</option>
         <option value="sinks">Sinks</option>
         <option value="normal">Normal map</option>
+        <option value="excess">Excess volume</option>
+        <option value="connected">Connected volumes</option>
+        <option value="heightn1">Previous height</option>
       </select>
     </div>
   </body>

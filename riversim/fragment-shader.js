@@ -13,11 +13,11 @@ out vec4 colour;
 
 void main() {
   vec4 value = texture(source, texCoord);
-  if (value == vec4(0) || isnan(value) != bvec4(false) || isinf(value) != bvec4(false)) {
-    colour = vec4(1, 0, 1, 1);
-    return;
+  // colour = normalise ? vec4((value.rgb / scale + 1.0) * 0.5, 1) : vec4(value.rgb / scale, 1);
+  if (normalise) {
+    colour = vec4(vec3(sign(value) * 0.5 + 0.5), 1.0);
   } else {
-    colour = normalise ? vec4((value.rgb / scale + 1.0) * 0.5, 1) : vec4(value.rgb / scale, 1);
+    colour = value.x == 0.0 ? vec4(0) : vec4(1);
   }
 }
 `;
@@ -287,22 +287,136 @@ void main() {
 }
 `;
 
-const UPDATE_HEIGHT_FS = 
+// const CALC_EXCESS_VOLUME_FS = 
+// `#version 300 es
+// precision highp float;
+
+// in vec2 v_texCoord;
+
+// uniform sampler2D heightTexture;
+// uniform sampler2D heightn1Texture;
+
+// out float excess;
+
+// void main() {
+//   ivec2 texCoord = ivec2(v_texCoord);
+
+//   float h = texelFetch(heightTexture, texCoord, 0).x;
+//   float hn1 = texelFetch(heightn1Texture, texCoord, 0).x;
+//   float dh = h - hn1;
+
+//   excess = dh;
+// }
+// `;
+
+// const SET_CONNECTED_VOLUMES_FS = 
+// `#version 300 es
+// precision highp float;
+
+// in vec2 v_texCoord;
+
+// uniform sampler2D heightTexture;
+// uniform sampler2D groundHeightTexture;
+
+// out vec4 connectedVolumes;
+
+// void main() {
+//   ivec2 texCoord = ivec2(v_texCoord);
+
+//   bool c = texelFetch(heightTexture, texCoord, 0).x > texelFetch(groundHeightTexture, texCoord, 0).x;
+//   if (!c) {
+//     connectedVolumes = vec4(0);
+//     return;
+//   }
+
+//   bool l = texelFetchOffset(heightTexture, texCoord, 0, ivec2(-1, 0)).x > texelFetchOffset(groundHeightTexture, texCoord, 0, ivec2(-1, 0)).x;
+//   bool r = texelFetchOffset(heightTexture, texCoord, 0, ivec2( 1, 0)).x > texelFetchOffset(groundHeightTexture, texCoord, 0, ivec2( 1, 0)).x;
+//   bool t = texelFetchOffset(heightTexture, texCoord, 0, ivec2(0, -1)).x > texelFetchOffset(groundHeightTexture, texCoord, 0, ivec2(0, -1)).x;
+//   bool b = texelFetchOffset(heightTexture, texCoord, 0, ivec2(0,  1)).x > texelFetchOffset(groundHeightTexture, texCoord, 0, ivec2(0,  1)).x;
+
+//   connectedVolumes = vec4(l ? 1 : 0, r ? 1 : 0, t ? 1 : 0, b ? 1 : 0);
+// }
+// `;
+
+// const PROPAGATE_EXCESS_VOLUME_FS = 
+// `#version 300 es
+// precision highp float;
+
+// in vec2 v_texCoord;
+
+// uniform sampler2D connectedVolumesTexture;
+// uniform sampler2D excessTexture;
+// uniform float weightOffset;
+
+// out float new;
+
+// void main() {
+//   ivec2 texCoord = ivec2(v_texCoord);
+
+//   vec4 connectedVolumes = texelFetch(connectedVolumesTexture, texCoord, 0);
+//   bvec4 connected = equal(connectedVolumes, vec4(1));
+//   float ec = texelFetch(excessTexture, texCoord, 0).x;
+//   if (!any(connected)) {
+//     new = ec;
+//     return;
+//   }
+
+//   // float sum = 1.0;
+//   // sum += connected.x ? texelFetchOffset(excessTexture, texCoord, 0, ivec2(-1, 0)).x : 0.0;
+//   // sum += connected.y ? texelFetchOffset(excessTexture, texCoord, 0, ivec2( 1, 0)).x : 0.0;
+//   // sum += connected.z ? texelFetchOffset(excessTexture, texCoord, 0, ivec2(0, -1)).x : 0.0;
+//   // sum += connected.w ? texelFetchOffset(excessTexture, texCoord, 0, ivec2(0,  1)).x : 0.0;
+
+//   float el = connected.x ? texelFetchOffset(excessTexture, texCoord, 0, ivec2(-1, 0)).x : 0.0;
+//   float er = connected.y ? texelFetchOffset(excessTexture, texCoord, 0, ivec2( 1, 0)).x : 0.0;
+//   float et = connected.z ? texelFetchOffset(excessTexture, texCoord, 0, ivec2(0, -1)).x : 0.0;
+//   float eb = connected.w ? texelFetchOffset(excessTexture, texCoord, 0, ivec2(0,  1)).x : 0.0;
+//   float n = 1.0 + (connected.x ? 1.0 : 0.0) + (connected.y ? 1.0 : 0.0) + (connected.z ? 1.0 : 0.0) + (connected.w ? 1.0 : 0.0);
+//   float weight = 1.0 + weightOffset;
+//   float sum = ec * (1.0 - n * weightOffset) + (el + er + et + eb) * weight;
+//   // float n = 1.0 + dot(vec4(1), vec4(connected));
+  
+//   new = sum / n;
+// }
+// `;
+
+// const CORRECT_VOLUME_FS = 
+// `#version 300 es
+// precision highp float;
+
+// in vec2 v_texCoord;
+
+// // uniform vec2 textureDimensions;
+// uniform sampler2D heightTexture;
+// uniform sampler2D excessTexture;
+
+// out float height;
+
+// void main() {
+//   ivec2 texCoord = ivec2(v_texCoord);
+//   // vec2 texCoord = v_texCoord / textureDimensions;
+
+//   float h = texelFetch(heightTexture, texCoord, 0).x;
+//   float e = texelFetch(excessTexture, texCoord, 0).x;
+
+//   height = h - e;
+// }
+// `;
+
+const CORRECT_VOLUME_FS = 
 `#version 300 es
 precision highp float;
 
 in vec2 v_texCoord;
+in float excess;
 
-uniform sampler2D newHeightTexture;
 uniform sampler2D heightTexture;
 
-layout(location = 0) out float height;
-layout(location = 1) out float heightn1;
+out float height;
 
 void main() {
-  ivec2 texCoord = ivec2(v_texCoord);
-  height = texelFetch(newHeightTexture, texCoord, 0).x;
-  heightn1 = texelFetch(heightTexture, texCoord, 0).x;
+  float h = texture(heightTexture, v_texCoord).x;
+  height = h - excess;
 }
 `;
 
