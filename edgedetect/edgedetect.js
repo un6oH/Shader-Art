@@ -173,7 +173,7 @@ function main(image) {
 
   function display() {
     gl.useProgram(displayProgram);
-    setFramebuffer(gl, null, image.naturalWidth, image.naturalHeight);
+    setFramebuffer(gl, null, image.naturalWidth * scale, image.naturalHeight * scale);
     gl.bindVertexArray(displayVertexArray);
     bindTextureToLocation(gl, displayLocations.image, 0, texture);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -186,8 +186,9 @@ function main(image) {
     console.log(label + ":", results);
   }
 
-  let threshold = 0.1;
+  let threshold = 0.25;
   let mode = AGGREGATE;
+  let scale = 1;
 
   let j = 0;
   document.addEventListener("click", () => {
