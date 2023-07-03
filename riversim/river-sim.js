@@ -192,7 +192,7 @@ function main(sourceImages) {
     [1, 1, 0],
     [1, 0.5, 0],
     [0.0, 0.001, -1],
-    [1, 0.1, 0],
+    [0.001, 0.0001, 0],
   ];
   
   for (let i = 0; i < parameterNames.length; i++) {
@@ -222,7 +222,7 @@ function main(sourceImages) {
   const simulation = {};
   simulation.input = true;
   simulation.output = true;
-  simulation.correctVolume = true;
+  simulation.correctVolume = false;
 
   // GUI
   // buttons
@@ -423,17 +423,17 @@ function main(sourceImages) {
       excessTexture, 
     ][simulation.outputTexture];
     let props = [ // scale, zero-centred
-      [simulation.heightScale * 2, false], 
-      [0.001, true], 
+      [simulation.heightScale, false], 
+      [simulation.heightScale, false], 
       [1000, true], 
       [1, false], 
-      [simulation.heightScale * 2, false], 
-      [simulation.heightScale * 2, false], 
-      [simulation.heightScale * 2, false], 
+      [simulation.heightScale, false], 
+      [simulation.heightScale, false], 
+      [simulation.heightScale, false], 
       [1, false], 
       [1, false], 
       [1, true], 
-      [simulation.heightScale * 2, false], 
+      [simulation.heightScale, false], 
       [simulation.heightScale, false], 
       [0.001, true], 
     ][simulation.outputTexture];
@@ -504,12 +504,12 @@ function main(sourceImages) {
     heightStep++;
   }
 
-  function setDepth() {
+  function setDepth(heightTexture) {
     // console.log("setDepth()");
     gl.useProgram(setDepthProgram);
 
     setVertexShaderVariables(setDepthLocations, true);
-    bindTextureToLocation(gl, setDepthLocations.heightTexture, 0, heightTextures[heightStep % 2]);
+    bindTextureToLocation(gl, setDepthLocations.heightTexture, 0, heightTexture);
     bindTextureToLocation(gl, setDepthLocations.groundHeightTexture, 1, groundHeightTexture);
 
     setFramebuffer(gl, depthFramebuffer, ...simulation.textureDimensions);
@@ -555,6 +555,7 @@ function main(sourceImages) {
   }
 
   function solveHeight(deltaTime) {
+
     // console.log("solveHeight()");
     gl.useProgram(solveHeightProgram);
 
@@ -562,20 +563,23 @@ function main(sourceImages) {
     
     gl.bindFramebuffer(gl.FRAMEBUFFER, heightFramebuffers[heightStep % 2]);
     gl.bindTexture(gl.TEXTURE_2D, solveHeightTextures[0]);
-    // gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 0, 0, ...simulation.textureDimensions, 0);
     gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 0, 0, ...simulation.textureDimensions);
     gl.bindTexture(gl.TEXTURE_2D, solveHeightTextures[1]);
-    // gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 0, 0, ...simulation.textureDimensions, 0);
     gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 0, 0, ...simulation.textureDimensions);
-
-    bindTextureToLocation(gl, solveHeightLocations.alphaTexture, 0, alphaTexture);
-    bindTextureToLocation(gl, solveHeightLocations.betaTexture, 1, betaTexture);
-    bindTextureToLocation(gl, solveHeightLocations.depthSumTexture, 3, depthSumTexture);
     let gamma = simulation.grav * (deltaTime**2) / (4 * simulation.unit**2);
-    gl.uniform1f(solveHeightLocations.gamma, gamma);
 
     for (let i = 0; i < simulation.solveIterations; ++i) {
+      setDepth(solveHeightTextures[i % 2]);
+      setAlpha(deltaTime);
+      setDepthSum();
+
+      gl.useProgram(solveHeightProgram);
+      setVertexShaderVariables(solveHeightLocations, true);
+      bindTextureToLocation(gl, solveHeightLocations.alphaTexture, 0, alphaTexture);
+      bindTextureToLocation(gl, solveHeightLocations.betaTexture, 1, betaTexture);
       bindTextureToLocation(gl, solveHeightLocations.heightTexture, 2, solveHeightTextures[i % 2]);
+      bindTextureToLocation(gl, solveHeightLocations.depthSumTexture, 3, depthSumTexture);
+      gl.uniform1f(solveHeightLocations.gamma, gamma);
 
       setFramebuffer(gl, solveHeightFramebuffers[(i + 1) % 2], ...simulation.textureDimensions);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -802,19 +806,18 @@ function main(sourceImages) {
     // console.log("updateHeight() deltaTime =", deltaTime);
     if (simulation.input) addSources(deltaTime);
     if (simulation.output) removeSinks(deltaTime);
-    setDepth();
-    setAlpha(deltaTime);
+    // setDepth();
+    // setAlpha(deltaTime);
     setBeta();
-    setDepthSum();
+    // setDepthSum();
     solveHeight(deltaTime);
     incHeight();
     if (simulation.correctVolume) correctVolume();
     setBoundaries();
-    setDepth();
+    setDepth(heightTextures[heightStep % 2]);
   }
   
   function render() {
-    setDepth();
     gl.useProgram(renderProgram);
 
     setVertexShaderVariables(renderLocations, false);

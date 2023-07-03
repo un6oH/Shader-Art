@@ -13,12 +13,12 @@ out vec4 colour;
 
 void main() {
   vec4 value = texture(source, texCoord);
-  // colour = normalise ? vec4((value.rgb / scale + 1.0) * 0.5, 1) : vec4(value.rgb / scale, 1);
-  if (normalise) {
-    colour = vec4(vec3(sign(value.x) * 0.5 + 0.5), 1.0);
-  } else {
-    colour = vec4(vec3(value.x == 0.0 ? 0.0 : 1.0), 1.0);
-  }
+  colour = normalise ? vec4((value.rgb / scale + 1.0) * 0.5, 1) : vec4(value.rgb / scale, 1);
+  // if (normalise) {
+  //   colour = vec4(vec3(sign(value.x) * 0.5 + 0.5), 1.0);
+  // } else {
+  //   colour = vec4(vec3(value.x == 0.0 ? 0.0 : 1.0), 1.0);
+  // }
 }
 `;
 

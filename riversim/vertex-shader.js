@@ -66,8 +66,8 @@ void main() {
   bool hasVolume;
   float x1 = textureDimensions.x - 1.0;
   for (float x = x0 + 1.0; x < textureDimensions.x; x += 1.0) {
-    hasVolume = texelFetch(heightTexture, texCoord, 0).x > texelFetch(groundHeightTexture, texCoord, 0).x;
     texCoord.x = int(x);
+    hasVolume = texelFetch(heightTexture, texCoord, 0).x > texelFetch(groundHeightTexture, texCoord, 0).x;
     if (hasVolume != hasVolume0) {
       x1 = x - 1.0;
       break;
