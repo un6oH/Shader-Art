@@ -83,6 +83,12 @@ function setupBuffer(gl, buffer, data, usage) {
   gl.bufferData(gl.ARRAY_BUFFER, data, usage);
 }
 
+function bindBuffer(gl, buffer, location, size, type, normalized = false, stride = 0, offset = 0) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.enableVertexAttribArray(location);
+  gl.vertexAttribPointer(location, size, type, normalized, stride, offset);
+}
+
 function makeVertexArray(gl, buffers) {
   const vertexArray = gl.createVertexArray();
   gl.bindVertexArray(vertexArray);
@@ -111,6 +117,7 @@ function drawWithTransformFeedback(gl, transformFeedback, primitive, drawFunctio
   drawFunction();
   gl.endTransformFeedback();
   gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+  gl.bindBuffer(gl.ARRAY_BUFFER, null);
 }
 
 function setFramebuffer(gl, framebuffer, width, height) { 

@@ -58,26 +58,6 @@ function main(sourceImages) {
   const solveHeightLocations = createLocations(gl, solveHeightProgram, ["position"], 
   ["textureDimensions", "alphaTexture", "betaTexture", "heightTexture", "depthSumTexture", "gamma"]);
 
-  console.log("creating calc excess volume program");
-  const calcExcessVolumeProgram = createProgram(gl, TEXTURE_VS, CALC_EXCESS_VOLUME_FS);
-  const calcExcessVolumeLocations = createLocations(gl, calcExcessVolumeProgram, ["position"], 
-  ["textureDimensions", "heightTexture", "heightn1Texture"]);
-
-  console.log("creating set connected volumes program");
-  const setConnectedVolumesProgram = createProgram(gl, TEXTURE_VS, SET_CONNECTED_VOLUMES_FS);
-  const setConnectedVolumesLocations = createLocations(gl, setConnectedVolumesProgram, ["position"], 
-  ["textureDimensions", "heightTexture", "groundHeightTexture"]);
-
-  console.log("creating propagate excess volume program");
-  const propagateExcessVolumeProgram = createProgram(gl, TEXTURE_VS, PROPAGATE_EXCESS_VOLUME_FS);
-  const propagateExcessVolumeLocations = createLocations(gl, propagateExcessVolumeProgram, ["position"], 
-  ["textureDimensions", "connectedVolumesTexture", "excessTexture", "weightOffset"]);
-
-  console.log("creating correct volume program");
-  const correctVolumeProgram = createProgram(gl, TEXTURE_VS, CORRECT_VOLUME_FS);
-  const correctVolumeLocations = createLocations(gl, correctVolumeProgram, ["position"], 
-  ["textureDimensions", "heightTexture", "excessTexture"]);
-
   console.log("creating update velocity program");
   const updateVelocityProgram = createProgram(gl, TEXTURE_VS, UPDATE_VELOCITY_FS);
   const updateVelocityLocations = createLocations(gl, updateVelocityProgram, ["position"], 
@@ -94,9 +74,50 @@ function main(sourceImages) {
   const setNormalMapLocations = createLocations(gl, setNormalMapProgram, ["position"], 
   ["textureDimensions", "heightTexture", "unit"]);
 
+  // volume correction programs
+  console.log("creating calc edges program");
+  const calcEdgesProgram = createProgram(gl, CALC_EDGES_VS, BLANK_FS, ["newX0", "newX1"]);
+  const calcEdgesLocations = createLocations(gl, calcEdgesProgram, 
+    ["prevX1", "y"], 
+    ["heightTexture", "groundHeightTexture", "textureDimensions"]);
+
+  console.log("creating calc excess program");
+  const calcExcessProgram = createProgram(gl, CALC_EXCESS_VS, BLANK_FS, ["excess"]);
+  const calcExcessLocations = createLocations(gl, calcExcessProgram, 
+    ["x0", "x1", "y"], 
+    ["textureDimensions", "heightTexture", "heightn1Texture"]);
+
+  console.log("creating compile coords program");
+  const compileCoordsProgram = createProgram(gl, COMPILE_COORDS_VS, BLANK_FS, ["v_x0", "v_y0", "v_x1", "v_y1"], gl.INTERLEAVED_ATTRIBS);
+  const compileCoordsLocations = createLocations(gl, compileCoordsProgram, ["x0", "x1", "y"], []);
+
+  console.log("creating duplicate excess buffer program");
+  const duplicateExcessBufferProgram = createProgram(gl, DUPLICATE_EXCESS_BUFFER_VS, BLANK_FS, ["v_excess", "v_copy"], gl.INTERLEAVED_ATTRIBS);
+  const duplicateExcessBufferLocations = createLocations(gl, duplicateExcessBufferProgram, ["excess"], []);
+
+  console.log("creating correct volume program");
+  const correctVolumeProgram = createProgram(gl, CORRECT_VOLUME_VS, CORRECT_VOLUME_FS);
+  const correctVolumeLocations = createLocations(gl, correctVolumeProgram, ["position", "excess"], ["textureDimensions", "heightTexture"]);
+
+  console.log("creating rotate texture program");
+  const rotateTextureProgram = createProgram(gl, ROTATE_TEXTURE_VS, ROTATE_TEXTURE_FS);
+  const rotateTextureLocations = createLocations(gl, rotateTextureProgram, ["position"], ["matrix", "u_texture"]);
+
+  console.log("creating set boundaries program");
+  const setBoundariesProgram = createProgram(gl, TEXTURE_VS, SET_BOUNDARIES_FS);
+  const setBoundariesLocations = createLocations(gl, setBoundariesProgram, ["position"], ["textureDimensions", "heightTexture", "groundHeightTexture", "epsilon"]);
+
   // initialise buffers
   const canvasCoordsBuffer = gl.createBuffer();
   const pixelCoordsBuffer = gl.createBuffer();
+  const clipSpaceCoordsBuffer = gl.createBuffer();
+
+  const yBuffer = gl.createBuffer();
+  const x0Buffer = gl.createBuffer();
+  const x1Buffers = [gl.createBuffer(), gl.createBuffer()];
+  const excessBuffer = gl.createBuffer();
+  const edgesBuffer = gl.createBuffer();
+  const duplicateExcessBuffer = gl.createBuffer();
 
   // textures
   const heightTextures = [createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]), createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE])];
@@ -112,10 +133,12 @@ function main(sourceImages) {
   const betaTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
   const depthSumTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
   const velocityTextures = [createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]), createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE])];
-  const excessVolumeTextures = [createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]), createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE])];
-  const connectedVolumesTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+  const rotatedHeightTextures = [createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]), createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE])];
+  const rotatedHeightn1Texture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+  const rotatedGroundHeightTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
 
   const normalMapTexture = createTexture(gl, [gl.LINEAR, gl.LINEAR, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+  const excessTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
 
   // framebuffers
   const heightFramebuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
@@ -127,9 +150,18 @@ function main(sourceImages) {
   const betaFramebuffer = gl.createFramebuffer();
   const depthSumFramebuffer = gl.createFramebuffer();
   const velocityFramebuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
-  const excessVolumeFramebuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
-  const connectedVolumesFramebuffer = gl.createFramebuffer();
   const normalMapFramebuffer = gl.createFramebuffer();
+  const rotatedHeightFramebuffers = [gl.createFramebuffer(), gl.createFramebuffer()];
+  const rotatedHeightn1Framebuffer = gl.createFramebuffer();
+  const rotatedGroundHeightFramebuffer = gl.createFramebuffer();
+  const excessFramebuffer = gl.createFramebuffer();
+
+  const calcEdgesTransformFeedbackA = makeTransformFeedback(gl, [x0Buffer, x1Buffers[1]]);
+  const calcEdgesTransformFeedbackB = makeTransformFeedback(gl, [x0Buffer, x1Buffers[0]]);
+  const calcEdgesTransformFeedbacks = [calcEdgesTransformFeedbackA, calcEdgesTransformFeedbackB];
+  const calcExcessTransformFeedback = makeTransformFeedback(gl, [excessBuffer]);
+  const compileCoordsTransformFeedback = makeTransformFeedback(gl, [edgesBuffer]);
+  const duplicateExcessBufferTransformFeedback = makeTransformFeedback(gl, [duplicateExcessBuffer]);
 
   let heightStep = 0;
   let velocityStep = 0;
@@ -146,7 +178,8 @@ function main(sourceImages) {
     "inputRate",
     "outputRate", 
     "timeWarp", 
-    "weightOffset"
+    "weightOffset", 
+    "groundMargin", 
   ];
   const parameterAttributes = [ // default, step, min, max
     [10, 0.1, 0],
@@ -159,6 +192,7 @@ function main(sourceImages) {
     [1, 1, 0],
     [1, 0.5, 0],
     [0.0, 0.001, -1],
+    [1, 0.1, 0],
   ];
   
   for (let i = 0; i < parameterNames.length; i++) {
@@ -188,7 +222,7 @@ function main(sourceImages) {
   const simulation = {};
   simulation.input = true;
   simulation.output = true;
-  simulation.correctVolume = false;
+  simulation.correctVolume = true;
 
   // GUI
   // buttons
@@ -211,21 +245,30 @@ function main(sourceImages) {
   })
   // output selector
   const textureSelect = document.querySelector("#texture-select");
-  const textureDict = {
-    height: 0, 
-    depth: 1, 
-    velocity: 2, 
-    alpha: 3, 
-    beta: 4, 
-    depthsum: 5, 
-    ground: 6, 
-    sources: 7, 
-    sinks: 8, 
-    normal: 9, 
-    excess: 10, 
-    connected: 11, 
-    heightn1: 12, 
-  };
+  const textures = [ // value, name, scale, normalise
+    ["height", "Height"],  
+    ["depth", "Depth"], 
+    ["velocity", "Velocity"],  
+    ["alpha", "Alpha"],  
+    ["beta", "Beta"], 
+    ["depthsum", "Depth sum"],  
+    ["ground", "Ground"],  
+    ["sources", "Sources"],  
+    ["sinks", "Sinks"],  
+    ["normal", "Normal map"],  
+    ["heightn1", "Previous height"],
+    ["rotatedheight", "Rotated height"],
+    ["excess", "Excess"], 
+  ];
+  const textureDict = {};
+  textures.forEach(([value, name], index) => {
+    let option = document.createElement("option");
+    option.value = value;
+    option.textContent = name;
+    textureSelect.appendChild(option);
+
+    textureDict[value] = index;
+  });
   textureSelect.addEventListener("input", event => {
     let value = textureSelect.value;
     if (textureSelect.value == "render") {
@@ -238,9 +281,10 @@ function main(sourceImages) {
     drawTexture();
   })
 
-  document.addEventListener("keypress", keyPress);
   function setSimulation() {
     simulation.textureDimensions = [sourceImages[0].naturalWidth, sourceImages[0].naturalHeight];
+    simulation.maxLength = Math.max(...simulation.textureDimensions);
+    console.log("texture dimensions:", ...simulation.textureDimensions, "buffer length:", simulation.maxLength);
 
     parameterInputs.forEach((input, i) => {
       simulation[parameterNames[i]] = input.value;
@@ -249,8 +293,7 @@ function main(sourceImages) {
     inputToggle.textContent = "Input: " + (simulation.input ? "on" : "off");
     outputToggle.textContent = "Output: " + (simulation.output ? "on" : "off");
 
-    simulation.solveIterations = 20;
-    simulation.excessVolumePropagationRadius = 100;
+    simulation.solveIterations = 40;
 
     simulation.outputTexture = textureDict[textureSelect.value];
     simulation.render = textureSelect.value == "render";
@@ -264,24 +307,32 @@ function main(sourceImages) {
       0, 0, canvas.width, 0, canvas.width, canvas.height, 
       0, 0, canvas.width, canvas.height, 0, canvas.height, 
     ]), gl.STATIC_DRAW);
-
     setupBuffer(gl, pixelCoordsBuffer, new Float32Array([
       0, 0, simulation.textureDimensions[0], 0, simulation.textureDimensions[0], simulation.textureDimensions[1], 
       0, 0, simulation.textureDimensions[0], simulation.textureDimensions[1], 0, simulation.textureDimensions[0], 
     ]), gl.STATIC_DRAW);
+    setupBuffer(gl, clipSpaceCoordsBuffer, new Float32Array([
+      -1, 1, 1, 1, 1, -1, 
+      -1, 1, 1, -1, -1, -1, 
+    ]), gl.STATIC_DRAW);
+
+    simulation.initialX1 = new Float32Array(new Array(simulation.maxLength).fill(-1));
+    setupBuffer(gl, yBuffer, new Float32Array(new Array(simulation.maxLength).fill(0).map((n, i) => i)), gl.STATIC_DRAW);
+    setupBuffer(gl, x0Buffer, simulation.maxLength * 4, gl.DYNAMIC_DRAW);
+    setupBuffer(gl, x1Buffers[0], simulation.initialX1, gl.DYNAMIC_DRAW);
+    setupBuffer(gl, x1Buffers[1], simulation.maxLength * 4, gl.DYNAMIC_DRAW);
+    setupBuffer(gl, excessBuffer, simulation.maxLength * 4, gl.DYNAMIC_DRAW);
+    setupBuffer(gl, duplicateExcessBuffer, simulation.maxLength * 2 * 4, gl.DYNAMIC_DRAW);
+    setupBuffer(gl, edgesBuffer, simulation.maxLength * 2 * 2 * 4, gl.DYNAMIC_DRAW);
 
     // set storage for 1D fields
-    [groundHeightTexture, depthTexture, alphaTexture, betaTexture].forEach((texture) => {
+    [groundHeightTexture, depthTexture, alphaTexture, betaTexture, excessTexture].forEach((texture) => {
       gl.bindTexture(gl.TEXTURE_2D, texture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, simulation.textureDimensions[0], simulation.textureDimensions[1], 0, gl.RED, gl.FLOAT, null);
     });
     // storage for depthSumTexture
     gl.bindTexture(gl.TEXTURE_2D, depthSumTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, simulation.textureDimensions[0], simulation.textureDimensions[1], 0, gl.RG, gl.FLOAT, null);
-
-    // storage for connectedVolumesTexture
-    gl.bindTexture(gl.TEXTURE_2D, connectedVolumesTexture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, simulation.textureDimensions[0], simulation.textureDimensions[1], 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
     // set storage for image input textures
     gl.bindTexture(gl.TEXTURE_2D, groundHeightSourceTexture)
@@ -296,6 +347,12 @@ function main(sourceImages) {
     // normal map
     gl.bindTexture(gl.TEXTURE_2D, normalMapTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, ...simulation.textureDimensions, 0, gl.RGBA, gl.FLOAT, null);
+
+    // rotated textures
+    gl.bindTexture(gl.TEXTURE_2D, rotatedHeightn1Texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, simulation.textureDimensions[1], simulation.textureDimensions[0], 0, gl.RED, gl.FLOAT, null);
+    gl.bindTexture(gl.TEXTURE_2D, rotatedGroundHeightTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, simulation.textureDimensions[1], simulation.textureDimensions[0], 0, gl.RED, gl.FLOAT, null);
 
     // bind textures to framebuffers
     // height framebuffers
@@ -320,10 +377,9 @@ function main(sourceImages) {
       setupFramebuffer(gl, velocityFramebuffers[i], velocityTextures[i]);
       gl.clearBufferfv(gl.COLOR, 0, new Float32Array([0, 0, 0, 0]));
 
-      gl.bindTexture(gl.TEXTURE_2D, excessVolumeTextures[i]);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, simulation.textureDimensions[0], simulation.textureDimensions[1], 0, gl.RED, gl.FLOAT, null);
-      setupFramebuffer(gl, excessVolumeFramebuffers[i], excessVolumeTextures[i]);
-      gl.clearBufferfv(gl.COLOR, 0, new Float32Array([0, 0, 0, 0]));
+      gl.bindTexture(gl.TEXTURE_2D, rotatedHeightTextures[i]);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, simulation.textureDimensions[1], simulation.textureDimensions[0], 0, gl.RED, gl.FLOAT, null);
+      setupFramebuffer(gl, rotatedHeightFramebuffers[i], rotatedHeightTextures[i]);
     }
 
     // other framebuffers
@@ -332,8 +388,10 @@ function main(sourceImages) {
     setupFramebuffer(gl, alphaFramebuffer, alphaTexture);
     setupFramebuffer(gl, betaFramebuffer, betaTexture);
     setupFramebuffer(gl, depthSumFramebuffer, depthSumTexture);
-    setupFramebuffer(gl, connectedVolumesFramebuffer, connectedVolumesTexture);
     setupFramebuffer(gl, normalMapFramebuffer, normalMapTexture);
+    setupFramebuffer(gl, rotatedHeightn1Framebuffer, rotatedHeightn1Texture);
+    setupFramebuffer(gl, rotatedGroundHeightFramebuffer, rotatedGroundHeightTexture);
+    setupFramebuffer(gl, excessFramebuffer, excessTexture);
 
     setGroundHeightTexture();
     setNormalMap();
@@ -360,15 +418,13 @@ function main(sourceImages) {
       sourceTexture, 
       sinkTexture, 
       normalMapTexture, 
-      excessVolumeTextures[0], 
-      connectedVolumesTexture, 
       heightn1Textures[heightStep % 2], 
+      rotatedHeightTextures[0],
+      excessTexture, 
     ][simulation.outputTexture];
     let props = [ // scale, zero-centred
-      // [simulation.heightScale * 2, false], 
-      // [simulation.heightScale * 2, false], 
-      [1, false], 
-      [1, false], 
+      [simulation.heightScale * 2, false], 
+      [0.001, true], 
       [1000, true], 
       [1, false], 
       [simulation.heightScale * 2, false], 
@@ -377,9 +433,9 @@ function main(sourceImages) {
       [1, false], 
       [1, false], 
       [1, true], 
-      [0.01, true], 
-      [1, false], 
       [simulation.heightScale * 2, false], 
+      [simulation.heightScale, false], 
+      [0.001, true], 
     ][simulation.outputTexture];
     bindTextureToLocation(gl, drawTextureLocations.source, 0, texture);
     gl.uniform1f(drawTextureLocations.scale, props[0]);
@@ -540,49 +596,204 @@ function main(sourceImages) {
 
     heightStep++;
   }
+
+  function correctVolumeComplete(horizontal) {
+    let x0 = new Float32Array(simulation.maxLength);
+    gl.bindBuffer(gl.ARRAY_BUFFER, x0Buffer);
+    gl.getBufferSubData(gl.ARRAY_BUFFER, 0, x0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    // console.log("x0buffer:", x0);
+    for (let i = 0; i < simulation.textureDimensions[horizontal ? 1 : 0]; i++) {
+      if (x0[i] != simulation.textureDimensions[horizontal ? 0 : 1]) {
+        return false;
+      }
+    }
+    return true;
+  }
   
   function correctVolume() {
-    gl.useProgram(calcExcessVolumeProgram);
-    setVertexShaderVariables(calcExcessVolumeLocations, true);
-    bindTextureToLocation(gl, calcExcessVolumeLocations.heightTexture, 0, heightTextures[heightStep % 2]);
-    bindTextureToLocation(gl, calcExcessVolumeLocations.heightn1Texture, 1, heightn1Textures[heightStep % 2]);
-    setFramebuffer(gl, excessVolumeFramebuffers[0], ...simulation.textureDimensions);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    let startingHeightStep = heightStep;
+    let x0 = new Float32Array(simulation.maxLength);
+    let x1 = new Float32Array(simulation.maxLength);
+    let excess = new Float32Array(simulation.maxLength);
 
-    // drawTexture();
+    // horizontal
+    setupBuffer(gl, x1Buffers[0], simulation.initialX1, gl.DYNAMIC_DRAW);
+    for (let s = 0; s < simulation.textureDimensions[0] / 10; s++) {
+    // for (let s = 0; s < 2; s++) {
+      gl.enable(gl.RASTERIZER_DISCARD);
+      // calc edges
+      gl.useProgram(calcEdgesProgram);
+      bindBuffer(gl, x1Buffers[s % 2], calcEdgesLocations.prevX1, 1, gl.FLOAT, false, 0, 0);
+      bindBuffer(gl, yBuffer, calcEdgesLocations.y, 1, gl.FLOAT, false, 0, 0);
+      bindTextureToLocation(gl, calcEdgesLocations.heightTexture, 0, heightTextures[heightStep % 2]);
+      bindTextureToLocation(gl, calcEdgesLocations.groundHeightTexture, 1, groundHeightTexture);
+      gl.uniform2f(calcEdgesLocations.textureDimensions, ...simulation.textureDimensions);
+      setFramebuffer(gl, null, 0, 0);
+      drawWithTransformFeedback(gl, calcEdgesTransformFeedbacks[s % 2], gl.POINTS, () => { gl.drawArrays(gl.POINTS, 0, simulation.textureDimensions[1]); });
 
-    gl.useProgram(setConnectedVolumesProgram);
-    setVertexShaderVariables(setConnectedVolumesLocations, true);
-    bindTextureToLocation(gl, setConnectedVolumesLocations.heightTexture, 0, heightTextures[heightStep % 2]);
-    bindTextureToLocation(gl, setConnectedVolumesLocations.groundHeightTexture, 1, groundHeightTexture);
-    setFramebuffer(gl, connectedVolumesFramebuffer, ...simulation.textureDimensions);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-    
-    gl.useProgram(propagateExcessVolumeProgram);
-    setVertexShaderVariables(propagateExcessVolumeLocations, true);
-    bindTextureToLocation(gl, propagateExcessVolumeLocations.connectedVolumesTexture, 0, connectedVolumesTexture);
-    gl.uniform1f(propagateExcessVolumeLocations.weightOffset, simulation.weightOffset);
-    for (let i = 0; i < simulation.excessVolumePropagationRadius; i++) {
-      bindTextureToLocation(gl, propagateExcessVolumeLocations.excessTexture, 1, excessVolumeTextures[i % 2]);
-      setFramebuffer(gl, excessVolumeFramebuffers[(i + 1) % 2], ...simulation.textureDimensions);
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      if (correctVolumeComplete(true)) {
+        console.log(`horizontal volume correction complete (${s - 1} steps)`);
+        gl.disable(gl.RASTERIZER_DISCARD);
+        break;
+      }
+
+      // calc excess
+      gl.useProgram(calcExcessProgram);
+      bindBuffer(gl, x0Buffer, calcExcessLocations.x0, 1, gl.FLOAT, false, 0, 0);
+      bindBuffer(gl, x1Buffers[(s + 1) % 2], calcExcessLocations.x1, 1, gl.FLOAT, false, 0, 0);
+      bindBuffer(gl, yBuffer, calcExcessLocations.y, 1, gl.FLOAT, false, 0, 0);
+      gl.uniform2f(calcExcessLocations.textureDimensions, ...simulation.textureDimensions);
+      bindTextureToLocation(gl, calcExcessLocations.heightTexture, 0, heightTextures[heightStep % 2]);
+      bindTextureToLocation(gl, calcExcessLocations.heightn1Texture, 1, heightn1Textures[heightStep % 2]);
+      setFramebuffer(gl, null, 0, 0);
+      drawWithTransformFeedback(gl, calcExcessTransformFeedback, gl.POINTS, () => { gl.drawArrays(gl.POINTS, 0, simulation.textureDimensions[1]); });
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, x0Buffer);
+      gl.getBufferSubData(gl.ARRAY_BUFFER, 0, x0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, x1Buffers[(s + 1) % 2]);
+      gl.getBufferSubData(gl.ARRAY_BUFFER, 0, x1);
+      gl.bindBuffer(gl.ARRAY_BUFFER, excessBuffer);
+      gl.getBufferSubData(gl.ARRAY_BUFFER, 0, excess);
+      console.log("x0:", x0, "x1:", x1, "excess:", excess);
+
+
+      // compile coords
+      gl.useProgram(compileCoordsProgram);
+      bindBuffer(gl, x0Buffer, compileCoordsLocations.x0, 1, gl.FLOAT);
+      bindBuffer(gl, x1Buffers[(s + 1) % 2], compileCoordsLocations.x1, 1, gl.FLOAT);
+      bindBuffer(gl, yBuffer, compileCoordsLocations.y, 1, gl.FLOAT);
+      drawWithTransformFeedback(gl, compileCoordsTransformFeedback, gl.POINTS, () => { gl.drawArrays(gl.POINTS, 0, simulation.textureDimensions[1]); });
+
+      // duplicate coordinates
+      gl.useProgram(duplicateExcessBufferProgram);
+      bindBuffer(gl, excessBuffer, duplicateExcessBufferLocations.excess, 1, gl.FLOAT);
+      drawWithTransformFeedback(gl, duplicateExcessBufferTransformFeedback, gl.POINTS, () => { gl.drawArrays(gl.POINTS, 0, simulation.textureDimensions[1]); });
+
+      // correct volume
+      gl.disable(gl.RASTERIZER_DISCARD);
+
+      gl.useProgram(correctVolumeProgram);
+      bindBuffer(gl, edgesBuffer, correctVolumeLocations.position, 2, gl.FLOAT);
+      bindBuffer(gl, duplicateExcessBuffer, correctVolumeLocations.excess, 1, gl.FLOAT);
+      gl.uniform2fv(correctVolumeLocations.textureDimensions, simulation.textureDimensions);
+      bindTextureToLocation(gl, correctVolumeLocations.heightTexture, 0, heightTextures[heightStep % 2]);
+      setFramebuffer(gl, heightFramebuffers[(heightStep + 1) % 2], ...simulation.textureDimensions);
+      gl.drawArrays(gl.LINES, 0, simulation.textureDimensions[1] * 2);
+
+      bindTextureToLocation(gl, correctVolumeLocations.heightTexture, 0, groundHeightTexture);
+      setFramebuffer(gl, excessFramebuffer, ...simulation.textureDimensions);
+      gl.drawArrays(gl.LINES, 0, simulation.textureDimensions[1] * 2);
+
+      heightStep++;
     }
-    
-    if (!simulation.correctVolume) return;
 
-    gl.useProgram(correctVolumeProgram);
-    setVertexShaderVariables(correctVolumeLocations, true);
-    bindTextureToLocation(gl, correctVolumeLocations.heightTexture, 0, heightTextures[heightStep % 2]);
-    bindTextureToLocation(gl, correctVolumeLocations.excessTexture, 1, excessVolumeTextures[simulation.excessVolumePropagationRadius % 2]);
+    // create rotated height textures;
+    gl.useProgram(rotateTextureProgram);
+    bindBuffer(gl, clipSpaceCoordsBuffer, rotateTextureLocations.position, 2, gl.FLOAT);
+    gl.uniformMatrix3fv(rotateTextureLocations.matrix, true, [
+      0, -1, 0, 
+      1, 0, 0, 
+      0, 0, 1
+    ]);
+    bindTextureToLocation(gl, rotateTextureLocations.u_texture, 0, heightTextures[heightStep % 2]);
+    setFramebuffer(gl, rotatedHeightFramebuffers[0], simulation.textureDimensions[1], simulation.textureDimensions[0]);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    bindTextureToLocation(gl, rotateTextureLocations.u_texture, 0, heightn1Textures[heightStep % 2]);
+    setFramebuffer(gl, rotatedHeightn1Framebuffer, simulation.textureDimensions[1], simulation.textureDimensions[0]);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    bindTextureToLocation(gl, rotateTextureLocations.u_texture, 0, groundHeightTexture);
+    setFramebuffer(gl, rotatedGroundHeightFramebuffer, simulation.textureDimensions[1], simulation.textureDimensions[0]);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    let rotatedHeightStep = 0;
+    
+    // vertical
+    // setupBuffer(gl, x1Buffers[0], simulation.initialX1, gl.DYNAMIC_DRAW);
+    // for (let s = 0; s < simulation.textureDimensions[1] / 10; s++) {
+    // // for (let s = 0; s < 10; s++) {
+    //   gl.enable(gl.RASTERIZER_DISCARD);
+    //   // calc edges
+    //   gl.useProgram(calcEdgesProgram);
+    //   bindBuffer(gl, x1Buffers[s % 2], calcEdgesLocations.prevX1, 1, gl.FLOAT, false, 0, 0);
+    //   bindBuffer(gl, yBuffer, calcEdgesLocations.y, 1, gl.FLOAT, false, 0, 0);
+    //   bindTextureToLocation(gl, calcEdgesLocations.heightTexture, 0, rotatedHeightTextures[rotatedHeightStep % 2]);
+    //   bindTextureToLocation(gl, calcEdgesLocations.groundHeightTexture, 1, rotatedGroundHeightTexture);
+    //   gl.uniform1f(calcEdgesLocations.textureWidth, simulation.textureDimensions[1]);
+    //   setFramebuffer(gl, null, 0, 0);
+    //   drawWithTransformFeedback(gl, calcEdgesTransformFeedbacks[s % 2], gl.POINTS, () => { gl.drawArrays(gl.POINTS, 0, simulation.textureDimensions[0]); });
+
+    //   // calc excess
+    //   gl.useProgram(calcExcessProgram);
+    //   bindBuffer(gl, x0Buffer, calcExcessLocations.x0, 1, gl.FLOAT, false, 0, 0);
+    //   bindBuffer(gl, x1Buffers[(s + 1) % 2], calcExcessLocations.x1, 1, gl.FLOAT, false, 0, 0);
+    //   bindBuffer(gl, yBuffer, calcExcessLocations.y, 1, gl.FLOAT, false, 0, 0);
+    //   gl.uniform1f(calcExcessLocations.textureWidth, simulation.textureDimensions[1]);
+    //   bindTextureToLocation(gl, calcExcessLocations.heightTexture, 0, rotatedHeightTextures[rotatedHeightStep % 2]);
+    //   bindTextureToLocation(gl, calcExcessLocations.heightn1Texture, 1, rotatedHeightn1Texture[rotatedHeightStep % 2]);
+    //   setFramebuffer(gl, null, 0, 0);
+    //   drawWithTransformFeedback(gl, calcExcessTransformFeedback, gl.POINTS, () => { gl.drawArrays(gl.POINTS, 0, simulation.textureDimensions[0]); });
+
+    //   // compile coords
+    //   gl.useProgram(compileCoordsProgram);
+    //   bindBuffer(gl, x0Buffer, compileCoordsLocations.x0, 1, gl.FLOAT);
+    //   bindBuffer(gl, x1Buffers[(s + 1) % 2], compileCoordsLocations.x1, 1, gl.FLOAT);
+    //   bindBuffer(gl, yBuffer, compileCoordsLocations.y, 1, gl.FLOAT);
+    //   drawWithTransformFeedback(gl, compileCoordsTransformFeedback, gl.POINTS, () => { gl.drawArrays(gl.POINTS, 0, simulation.textureDimensions[0]); });
+
+    //   // duplicate coordinates
+    //   gl.useProgram(duplicateExcessBufferProgram);
+    //   bindBuffer(gl, excessBuffer, duplicateExcessBufferLocations.excess, 1, gl.FLOAT);
+    //   drawWithTransformFeedback(gl, duplicateExcessBufferTransformFeedback, gl.POINTS, () => { gl.drawArrays(gl.POINTS, 0, simulation.textureDimensions[0]); });
+
+    //   // correct volume
+    //   gl.disable(gl.RASTERIZER_DISCARD);
+
+    //   gl.useProgram(correctVolumeProgram);
+    //   bindBuffer(gl, edgesBuffer, correctVolumeLocations.position, 2, gl.FLOAT);
+    //   bindBuffer(gl, duplicateExcessBuffer, correctVolumeLocations.excess, 1, gl.FLOAT);
+    //   gl.uniform2fv(correctVolumeLocations.textureDimensions, simulation.textureDimensions);
+    //   bindTextureToLocation(gl, correctVolumeLocations.heightTexture, 0, rotatedHeightTextures[rotatedHeightStep % 2]);
+    //   setFramebuffer(gl, rotatedHeightFramebuffers[(rotatedHeightStep + 1) % 2], simulation.textureDimensions[1], simulation.textureDimensions[0]);
+    //   gl.drawArrays(gl.LINES, 0, simulation.textureDimensions[0] * 2);
+
+    //   rotatedHeightStep++;
+
+    //   if (correctVolumeComplete(false)) {
+    //     console.log("vertical volume correction complete");
+    //     break;
+    //   }
+    // }
+
+    // unrotate
+    gl.useProgram(rotateTextureProgram);
+    bindBuffer(gl, clipSpaceCoordsBuffer, rotateTextureLocations.position, 2, gl.FLOAT);
+    gl.uniformMatrix3fv(rotateTextureLocations.matrix, true, [
+      0, 1, 0, 
+      -1, 0, 0, 
+      0, 0, 1
+    ]);
+    bindTextureToLocation(gl, rotateTextureLocations.u_texture, 0, rotatedHeightTextures[rotatedHeightStep % 2]);
+    setFramebuffer(gl, heightFramebuffers[startingHeightStep % 2], simulation.textureDimensions[0], simulation.textureDimensions[1]);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    heightStep = startingHeightStep;
+  }
+
+  function setBoundaries() {
+    gl.useProgram(setBoundariesProgram);
+    setVertexShaderVariables(setBoundariesLocations, true);
+    bindTextureToLocation(gl, setBoundariesLocations.heightTexture, 0, heightTextures[heightStep % 2]);
+    bindTextureToLocation(gl, setBoundariesLocations.groundHeightTexture, 1, groundHeightTexture);
+    gl.uniform1f(setBoundariesLocations.epsilon, simulation.groundMargin);
     setFramebuffer(gl, heightFramebuffers[(heightStep + 1) % 2], ...simulation.textureDimensions);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, heightn1Framebuffers[heightStep % 2]);
-    gl.bindTexture(gl.TEXTURE_2D, heightn1Textures[(heightStep + 1) % 2]);
-    gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 0, 0, ...simulation.textureDimensions);
-    // bindTextureToLocation(gl, correctVolumeLocations.heightTexture, 0, heightn1Textures[heightStep % 2]);
-    // setFramebuffer(gl, heightn1Framebuffers[(heightStep + 1) % 2], ...simulation.textureDimensions);
-    // gl.drawArrays(gl.TRIANGLES, 0, 6);
+    bindTextureToLocation(gl, setBoundariesLocations.heightTexture, 0, heightn1Textures[heightStep % 2]);
+    setFramebuffer(gl, heightn1Framebuffers[(heightStep + 1) % 2], ...simulation.textureDimensions);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
 
     heightStep++;
   }
@@ -597,7 +808,8 @@ function main(sourceImages) {
     setDepthSum();
     solveHeight(deltaTime);
     incHeight();
-    correctVolume();
+    if (simulation.correctVolume) correctVolume();
+    setBoundaries();
     setDepth();
   }
   
@@ -689,14 +901,15 @@ function main(sourceImages) {
       case "Enter":
         step(1 / 60);
         break;
-      case "c":
-        console.log("correctVolume()");
-        correctVolume();
+      case "e":
+        
         break;
       default:
 
     }
   }
+
+  document.addEventListener("keypress", keyPress);
 
   function setVertexShaderVariables(locations, texture) {
     gl.bindBuffer(gl.ARRAY_BUFFER, texture ? pixelCoordsBuffer : canvasCoordsBuffer);
