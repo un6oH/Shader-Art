@@ -17,7 +17,7 @@ void main() {
   // if (normalise) {
   //   colour = vec4(vec3(sign(value.x) * 0.5 + 0.5), 1.0);
   // } else {
-  //   colour = vec4(vec3(value.x == 0.0 ? 0.0 : 1.0), 1.0);
+  //   colour = vec4(vec3(value.x <= 0.0 ? 0.0 : 1.0), 1.0);
   // }
 }
 `;
@@ -95,14 +95,13 @@ void main() {
   float b = texelFetch(groundHeightTexture, texCoord, 0).x;
   bool isSink = texelFetch(sinkTexture, texCoord, 0).x != 0.0;
   float d = texelFetch(depthTexture, texCoord, 0).x;
-  // float h = b + d;
 
-  if (!isSink || sinkHeight > b + d) {
+  if (!isSource || sinkHeight > h || sourceHeight < b) {
     height = h;
     return;
   }
 
-  height = max(h - outputRate * deltaTime, 0.0);
+  height = b + d - outputRate * deltaTime;
 }
 `;
 
@@ -287,7 +286,7 @@ void main() {
 }
 `;
 
-const CORRECT_VOLUME_FS = 
+const SET_EXCESS_FS = 
 `#version 300 es
 precision highp float;
 
@@ -295,15 +294,66 @@ in vec2 v_texCoord;
 in float v_excess;
 
 uniform vec2 textureDimensions;
+uniform sampler2D excessTexture;
+
+out float excess;
+
+void main() {
+  vec2 texCoord = v_texCoord / textureDimensions;
+  float e = texture(excessTexture, texCoord).x;
+  excess = e + v_excess;
+}
+`;
+
+const PROPAGATE_EXCESS_VOLUME_FS = 
+`#version 300 es
+precision highp float;
+
+in vec2 v_texCoord;
+
+uniform vec2 textureDimensions;
+uniform sampler2D excessTexture;
+
+out float excess;
+
+void main() {
+  vec2 onePixel = vec2(1) / textureDimensions;
+  vec2 texCoord = v_texCoord * onePixel;
+
+  float e = texture(excessTexture, texCoord).x;
+  if (e == 0.0) {
+    excess = 0.0;
+    return;
+  }
+
+  float e_l = texture(excessTexture, texCoord + onePixel * vec2(-1, 0)).x;
+  float e_r = texture(excessTexture, texCoord + onePixel * vec2(1, 0)).x;
+  float e_t = texture(excessTexture, texCoord + onePixel * vec2(0, -1)).x;
+  float e_b = texture(excessTexture, texCoord + onePixel * vec2(0, 1)).x;
+
+  float total = e + e_l + e_r + e_t + e_b;
+  float n = 1.0 + (e_l != 0.0 ? 1.0 : 0.0)+ (e_r != 0.0 ? 1.0 : 0.0)+ (e_t != 0.0 ? 1.0 : 0.0)+ (e_b != 0.0 ? 1.0 : 0.0);
+  excess = total / n;
+}
+`
+
+const CORRECT_VOLUME_FS = 
+`#version 300 es
+precision highp float;
+
+in vec2 v_texCoord;
+
+uniform vec2 textureDimensions;
 uniform sampler2D heightTexture;
+uniform sampler2D excessTexture;
 
 out float height;
 
 void main() {
-  ivec2 texCoord = ivec2(v_texCoord);
-  float h = texelFetch(heightTexture, texCoord, 0).x;
-  // height = max(h - v_excess, 0.0);
-  height = h - v_excess;
+  vec2 texCoord = v_texCoord / textureDimensions;
+  float h = texture(heightTexture, texCoord).x;
+  float e = texture(excessTexture, texCoord).x;
+  height = max(h - e, 0.0);
 }
 `;
 
@@ -325,12 +375,12 @@ void main() {
   float h = texture(heightTexture, texCoord).x;
   float b = texture(groundHeightTexture, texCoord).x;
   
-  if (h > b) {
+  if (h >= b) {
     height = h;
     return;
   }
 
-  height = max(0.0, b - epsilon);
+  height = max(b - epsilon, 0.0);
 }
 `;
 
@@ -446,12 +496,12 @@ precision highp float;
 
 in vec2 v_texCoord;
 
-uniform sampler2D u_texture;
+uniform sampler2D image;
 
 out vec4 colour;
 
 void main() {
-  colour = texture(u_texture, v_texCoord);
+  colour = texture(image, v_texCoord);
 }
 `;
 

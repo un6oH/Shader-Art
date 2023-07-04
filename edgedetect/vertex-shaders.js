@@ -91,9 +91,9 @@ out float v_x1;
 out float v_y1;
 
 void main() {
-  v_x0 = x0 - 0.5;
+  v_x0 = x0;
   v_y0 = y;
-  v_x1 = x1 + 0.5;
+  v_x1 = x1 + 1.0;
   v_y1 = y;
 }
 `;

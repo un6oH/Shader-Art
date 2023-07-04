@@ -186,7 +186,7 @@ function main(image) {
     console.log(label + ":", results);
   }
 
-  let threshold = 0.25;
+  let threshold = 0.15;
   let mode = AGGREGATE;
   let scale = 1;
 
