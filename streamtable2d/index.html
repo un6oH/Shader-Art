@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>2D Stream Table</title>
+    <style>
+      body {
+        background-color: #202020;
+        margin: 0;
+        padding: 0;
+      }
+
+      canvas {
+        width: 100vw;
+        height: 80vh;
+        position: fixed;
+      }
+
+      input {
+        font-size: 2em;
+      }
+
+      button {
+        font-size: 2em;
+      }
+    </style>
+    <link rel="icon" type="image/bmp" href="../favicon.bmp" />
+
+    <!-- libraries -->
+    <script src="../matrix-math.js"></script>
+    <script src="../gl-helpers.js"></script>
+
+    <!-- shaders -->
+    <script src="vertex-shaders.js"></script>
+    <script src="fragment-shaders.js"></script>
+  </head>
+
+  <body>
+    <canvas id="gl-canvas"></canvas>
+  </body>
+
+  <script src="streamtable2d.js"></script>
+</html>
