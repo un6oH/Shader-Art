@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Edge detect</title>
+    <style>
+      body {
+        background-color: #202020;
+        margin: 0;
+        padding: 0;
+      }
+
+      canvas {
+        width: 100vw;
+        height: 80vh;
+        position: fixed;
+      }
+
+      input {
+        font-size: 2em;
+      }
+
+      button {
+        font-size: 2em;
+      }
+    </style>
+    <link rel="icon" type="image/bmp" href="../favicon.bmp" />
+
+    <!-- libraries -->
+    <script src="../matrix-math.js"></script>
+    <script src="../gl-helpers.js"></script>
+
+    <!-- shaders -->
+    <script src="vertex-shaders.js"></script>
+    <script src="fragment-shaders.js"></script>
+  </head>
+
+  <body>
+    <div id="input-container">
+      <input id="threshold" type="number" value="0.2" step="0.05">
+      <button id="mode">Mode: local</button>
+    </div>
+    <canvas id="gl-canvas"></canvas>
+  </body>
+
+  <script src="edgedetect.js"></script>
+</html>

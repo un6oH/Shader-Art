@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Shader art</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      canvas {
+        width: 100vw;
+        height: 100vh;
+        position: fixed;
+      }
+
+      #parameter-container {
+        margin-top: 100px;
+        color: white;
+        position: fixed;
+        font-family: sans-serif;
+        z-index: 1;
+      }
+
+      p {
+        margin-bottom: 0px;
+      }
+
+    </style>
+    <link rel="icon" type="image/bmp" href="../favicon.bmp" />
+
+    <!-- libraries -->
+    <script src="../matrix-math.js"></script>
+    <script src="../twgl-full.min.js" type="text/js"></script>
+
+    <!-- shaders -->
+    <script src="../boids/vertex-shader.js"></script>
+    <script src="../boids/fragment-shader.js"></script>
+  </head>
+
+  <body>
+    <canvas id="gl-canvas"></canvas>
+    <div id="parameter-container">
+      <button id="reset" type="button">Reset</button>
+      <p>Number of boids: </p>
+      <input id="n" type="number" value="100" min="0">
+      <p>Max acceleration: </p>
+      <input id="maxAcc" type="number" value="50" min="0">
+      <p>Min speed: </p>
+      <input id="minSpeed" type="number" value="50" min="0">
+      <p>Max speed: </p>
+      <input id="maxSpeed" type="number" value="100" min="0">
+      <p>Separation factor: <output id="separationFValue"></output></p>
+      <input id="separationF" type="range" value="1" min="0" max="5" step="0.01">
+      <p>Alignment factor: <output id="alignmentFValue"></output></p>
+      <input id="alignmentF" type="range" value="1" min="0" max="5" step="0.01">
+      <p>Cohesion factor: <output id="cohesionFValue"></output></p>
+      <input id="cohesionF" type="range" value="1" min="0" max="5" step="0.01">
+      <p>Mouse avoidance factor: <output id="mouseAvoidanceFValue"></output></p>
+      <input id="mouseAvoidanceF" type="range" value="1" min="0" max="5" step="0.01">
+      <p>Vision radius: </p>
+      <input id="aoiRadius" type="number" value="50" min="0">
+      <p>Trail length</p>
+      <input id="trailLength" type="number" value="0" min="0">
+    </div>
+  </body>
+
+  <script src="../boids/boids.js"></script>
+<!-- </html> -->

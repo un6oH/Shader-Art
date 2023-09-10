@@ -88,7 +88,7 @@ function render(image) {
   draw();
 
   // animation 
-  const framesPerUpdate = 5;
+  const framesPerUpdate = 1;
   let frame = 1;
   let step = 0;
   requestAnimationFrame(animate);
@@ -221,7 +221,7 @@ function createAndSetupTexture(gl, wrapTexture) {
 
 function main() {
   const image = new Image();
-  image.src = "../image.png";
+  image.src = "image.png";
   image.onload = () => {
     render(image);
   }

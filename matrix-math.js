@@ -1,3 +1,34 @@
+const Vec3 = {
+  cross: (u, v) => {
+    return [
+      u[1]*v[2] - u[2]*v[1],
+      -(u[0]*v[2] - u[2]*v[0]),
+      u[0]*v[1] - u[1]*v[0]
+    ]
+  },
+
+  sub: (u, v) => {
+    return [
+      u[0] - v[0],
+      u[1] - v[1],
+      u[2] - v[2]
+    ];
+  },
+
+  normalise: (v) => {
+    let mag = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    if (mag > 0.00001) {
+      return [
+        v[0] / mag,
+        v[1] / mag,
+        v[2] / mag
+      ];
+    } else {
+      return [0, 0, 0];
+    }
+  }
+};
+
 const Mat3 = {
   //
   // matrix formulas
@@ -90,6 +121,28 @@ const Mat3 = {
 
   scale: (m, sx, sy) => {
     return Mat3.multiply(Mat3.scaling(sx, sy), m);
+  }, 
+
+  vectorMultiply: (M, v) => {
+    m11 = M[0];
+    m12 = M[1];
+    m13 = M[2];
+    m21 = M[3];
+    m22 = M[4];
+    m23 = M[5];
+    m31 = M[6];
+    m32 = M[7];
+    m33 = M[8];
+
+    v1 = v[0];
+    v2 = v[1];
+    v3 = v[2];
+
+    return [
+      m11*v1 + m21*v2 + m31*v3, 
+      m12*v1 + m22*v2 + m32*v3, 
+      m13*v1 + m23*v2 + m33*v3, 
+    ];
   }
 }
 
