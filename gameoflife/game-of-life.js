@@ -221,7 +221,7 @@ function createAndSetupTexture(gl, wrapTexture) {
 
 function main() {
   const image = new Image();
-  image.src = "../image.png";
+  image.src = "image.png";
   image.onload = () => {
     render(image);
   }

@@ -186,17 +186,9 @@ function main(image) {
     console.log(label + ":", results);
   }
 
-  let threshold = 0.15;
-  let mode = AGGREGATE;
-  let scale = 1;
-
-  let j = 0;
-  document.addEventListener("click", () => {
-    step(j);
-    display();
-    printBuffer(duplicateColourBuffer, 8, "colour (duplicated)");
-    j++;
-  });
+  let threshold = 0.2;
+  let mode = LOCAL;
+  let scale = 1.0;
 
   let complete = false;
   let x0 = new Float32Array(n);
@@ -214,6 +206,7 @@ function main(image) {
   }
 
   function full() {
+    setupBuffer(gl, x1Buffers[0], new Float32Array(initialX), gl.DYNAMIC_DRAW);
     for (let s = 0; s < image.naturalWidth; s++) {
       step(s);
       checkComplete();
@@ -225,23 +218,35 @@ function main(image) {
     display();
   }
 
-  function keyPress(event) {
-    switch(event.key) {
-      case " ":
-        full();
-        break;
-      case "ArrowUp":
-        break;
-      case "ArrowDown":
-        break;
-      case "ArrowRight":
-        break;
-      default:
+  full();
 
+  const thresholdInput = document.querySelector("#threshold");
+  thresholdInput.value = threshold;
+  thresholdInput.addEventListener("input", () => {
+    threshold = parseFloat(thresholdInput.value);
+    console.log("Threshold set to", thresholdInput.value);
+    full();
+  })
+
+  const modeToggle = document.querySelector("#mode");
+  modeToggle.addEventListener("click", () => {
+    mode = mode == LOCAL ? AGGREGATE : LOCAL;
+    modeToggle.textContent = "Mode: " + (mode == LOCAL ? "local" : "aggregate");
+    full();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key == "Shift") {
+      
+      thresholdInput.step = 0.01;
     }
-  }
+  });
 
-  document.addEventListener("keypress", full);
+  document.addEventListener("keyup", (event) => {
+    if (event.key == "Shift") {
+      thresholdInput.step = 0.05;
+    }
+  });
 }
 
 function setup() {

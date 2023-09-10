@@ -94,7 +94,7 @@ void main() {
   v_x0 = x0;
   v_y0 = y;
   v_x1 = x1 + 1.0;
-  v_y1 = y;
+  v_y1 = y + 1.0;
 }
 `;
 
