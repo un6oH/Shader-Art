@@ -7,6 +7,7 @@
       body {
         margin: 0;
         padding: 0;
+        background-color: darkgray;
       }
 
       canvas {
@@ -16,7 +17,6 @@
       }
 
       #parameter-container {
-        margin-top: 100px;
         color: white;
         position: fixed;
         font-family: sans-serif;
@@ -42,7 +42,16 @@
   <body>
     <canvas id="gl-canvas"></canvas>
     <div id="parameter-container">
+      <p>Controls:</p>
+      <ul>
+        <li>Enter: show/hide UI</li>
+        <li>Space: start/stop simulation</li>
+      </ul>
       <button id="reset" type="button">Reset</button>
+      <button id="screenshot" type="button">Screenshot</button>
+      <p>Resolution: </p>
+      <input id="width" type="number" value="1920" min="100">
+      <input id="height" type="number" value="1080" min="100">
       <p>Number of boids: </p>
       <input id="n" type="number" value="100" min="0">
       <p>Max acceleration: </p>
@@ -57,11 +66,11 @@
       <input id="alignmentF" type="range" value="1" min="0" max="5" step="0.01">
       <p>Cohesion factor: <output id="cohesionFValue"></output></p>
       <input id="cohesionF" type="range" value="1" min="0" max="5" step="0.01">
-      <p>Mouse avoidance factor: <output id="mouseAvoidanceFValue"></output></p>
-      <input id="mouseAvoidanceF" type="range" value="1" min="0" max="5" step="0.01">
       <p>Vision radius: </p>
       <input id="aoiRadius" type="number" value="50" min="0">
-      <p>Trail length</p>
+      <p>Boid size: </p>
+      <input id="boidSize" type="number" value="15" min="1">
+      <p>Trail length: </p>
       <input id="trailLength" type="number" value="0" min="0">
     </div>
   </body>

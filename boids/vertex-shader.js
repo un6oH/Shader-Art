@@ -13,9 +13,6 @@ uniform float maxSpeed;
 uniform float separationF;
 uniform float alignmentF;
 uniform float cohesionF;
-uniform bool mouseActive;
-uniform float mouseAvoidanceF;
-uniform vec2 mousePos;
 uniform float aoiRadius;
 uniform vec2 canvasDimensions; // constant
 
@@ -48,17 +45,6 @@ void main() {
   vec2 cohesionVector = avgPosition - position;
 
   vec2 targetVelocity = separationVector * separationF + alignmentVector * alignmentF + cohesionVector * cohesionF;
-
-  // mouse avoidance
-  if (mouseActive) {
-    vec2 mouseDisplacement = mousePos - position;
-    float distanceToMouse = length(mouseDisplacement);
-    if (distanceToMouse > aoiRadius) {
-      return;
-    }
-    vec2 mouseAvoidanceVector = mouseDisplacement - normalize(mouseDisplacement) * aoiRadius;
-    targetVelocity += mouseAvoidanceVector * mouseAvoidanceF;
-  }
 
   vec2 acc = targetVelocity - velocity;
   float accMag = length(acc);
@@ -158,8 +144,11 @@ const DRAW_TEXTURE_VS = `#version 300 es
 
 in vec2 position;
 
+out vec2 texCoord;
+
 void main() {
   gl_Position = vec4(position, 0, 1);
+  texCoord = (position + 1.0) * 0.5 ;
 }
 `
 

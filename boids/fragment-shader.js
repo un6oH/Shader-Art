@@ -59,13 +59,15 @@ const DRAW_TEXTURE_FS = `#version 300 es
 
 precision highp float;
 
+in vec2 texCoord;
+
 uniform sampler2D u_texture;
 uniform vec2 canvasDimensions;
 
 out vec4 colour;
 
 void main() {
-  vec4 value = texture(u_texture, gl_FragCoord.xy / canvasDimensions);
+  vec4 value = texture(u_texture, texCoord);
   // if (v.z != 0.) {
   //   v.xy /= v.z * 60.0;
   // }
