@@ -40,8 +40,9 @@ function main() {
     cohesionF: document.querySelector("#cohesionF"),
     aoiRadius: document.querySelector("#aoiRadius"),
     boidSize: document.querySelector("#boidSize"), 
-    trailLength: document.querySelector("#trailLength"), 
+    trailLength: document.querySelector("#trailLength"),
   };
+  const spriteSelector = document.querySelector("#sprite");
   const outputs = {
     separationF: document.querySelector("#separationFValue"), 
     alignmentF: document.querySelector("#alignmentFValue"), 
@@ -58,25 +59,19 @@ function main() {
   resetButton.addEventListener("click", setSimulation);
   screenshotButton.addEventListener("click", screenshot);
 
-  let showSettings = true;
   const parameterContainer = document.querySelector("#parameter-container");
-  function showHideSettings() {
-    showSettings = !showSettings;
-    console.log("Settings " + (showSettings ? "shown" : "hidden"));
-    if (showSettings) {
-      parameterContainer.style.zIndex = 1;
-    } else {
-      parameterContainer.style.zIndex = -1;
-    }
-  }
-
   function setParams() {
     for (let input in inputs) {
       params[input] = parseFloat(inputs[input].value);
     }
+    params.sprite = spriteSelector.value;
     console.log("setParams() params: ", params);
   }
   setParams();
+
+  ["maxAcc", "minSpeed", "maxSpeed", "separationF", "alignmentF", "cohesionF", "aoiRadius", "trailLength"].forEach(input => inputs[input].addEventListener('input', () => {
+    params[input] = parseFloat(inputs[input].value);
+  }));
 
   // constants
   let aoiTextureWidth = params.width / 8;
@@ -175,6 +170,12 @@ function main() {
     canvasWidth: gl.getUniformLocation(clearCanvasProgram, "canvasWidth"),
     clearColour: gl.getUniformLocation(clearCanvasProgram, "clearColour"),
   }
+
+  // unit circle array
+  const circleDetail = 16;
+  const angleInc = Math.PI * 2 / circleDetail;
+  
+  const unitCircle = new Array(circleDetail + 1).fill(0).map((x, i) => angleInc * i).map((a) => [Math.cos(a), Math.sin(a)]).flat();
   
   // boid properties
   const boids = {};
@@ -186,6 +187,86 @@ function main() {
 
   const boidColourBuffer = gl.createBuffer();
   const boidVertexBuffer = gl.createBuffer();
+  const boidIndexBuffer = gl.createBuffer();
+
+  // boid sprites
+  const spriteVertices = {
+    wedge: [
+      0.5, 0, 
+      -0.3, -0.25,
+      -0.5, -0.25, 
+      -0.5, 0.25, 
+      -0.3, 0.25, 
+    ], 
+    circle: [
+      0, 0, 
+      ...unitCircle.map((v) => v * 0.5)
+    ]
+  };
+  spriteVertices.circle.splice(34, 2);
+
+  const spriteIndices = {
+    wedge: [
+      0, 1, 4, 
+      1, 2, 3, 
+      1, 3, 4, 
+    ], 
+    circle: new Array(circleDetail).fill(0).map((v, i) => [0, i + 1, i + 2]).flat().flat(), 
+  };
+  spriteIndices.circle[circleDetail * 3 - 1] = 1;
+
+  const spriteColourFunctions = {
+    wedgeWhite: () => new Array(5).fill([1, 1, 1]),
+    wedgeSolid: () => new Array(5).fill([Math.random(), Math.random(), Math.random()]), 
+    wedgeGradient: () => {
+      let colour1 = [Math.random(), Math.random(), Math.random()];
+      let colour2 = [Math.random(), Math.random(), Math.random()];
+      let colour3 = [Math.random(), Math.random(), Math.random()];
+      return [colour1, colour2, colour2, colour3, colour3];
+    }, 
+    circleWhite: () => new Array(circleDetail + 1).fill([1, 1, 1]), 
+    circleSolid: () => new Array(circleDetail + 1).fill([Math.random(), Math.random(), Math.random()]), 
+    circleGradient: () => {
+      let colour1 = [Math.random(), Math.random(), Math.random()];
+      let colour2 = [Math.random(), Math.random(), Math.random()];
+      let array1 = [colour1];
+      let array2 = new Array(circleDetail).fill(colour2);
+      return array1.concat(array2);
+    }, 
+  };
+
+  const sprites = {
+    wedgeWhite: {
+      vertices: spriteVertices.wedge, 
+      indices: spriteIndices.wedge, 
+      colourFunction: spriteColourFunctions.wedgeWhite, 
+    }, 
+    wedgeSolid: {
+      vertices: spriteVertices.wedge, 
+      indices: spriteIndices.wedge, 
+      colourFunction: spriteColourFunctions.wedgeSolid, 
+    }, 
+    wedgeGradient: {
+      vertices: spriteVertices.wedge, 
+      indices: spriteIndices.wedge, 
+      colourFunction: spriteColourFunctions.wedgeGradient, 
+    }, 
+    circleWhite: {
+      vertices: spriteVertices.circle, 
+      indices: spriteIndices.circle, 
+      colourFunction: spriteColourFunctions.circleWhite, 
+    }, 
+    circleSolid: {
+      vertices: spriteVertices.circle, 
+      indices: spriteIndices.circle, 
+      colourFunction: spriteColourFunctions.circleSolid, 
+    }, 
+    circleGradient: {
+      vertices: spriteVertices.circle, 
+      indices: spriteIndices.circle, 
+      colourFunction: spriteColourFunctions.circleGradient, 
+    }, 
+  }
   
   function setVariables() {
     // canvas size
@@ -217,15 +298,24 @@ function main() {
     gl.bindBuffer(gl.ARRAY_BUFFER, position2Buffer); gl.bufferData(gl.ARRAY_BUFFER, boids.positions, gl.STATIC_DRAW);
 
     // boid display properties
-    boids.size = params.height * 0.001 * params.boidSize;
-    boids.spriteMesh = [
-      boids.size, 0, 
-      -boids.size, boids.size / 2, 
-      -boids.size, -boids.size / 2, 
-    ];
-    boids.drawColours = new Float32Array(new Array(params.n * boids.spriteMesh.length * 0.5).fill(0).map(() => [Math.random(), Math.random(), Math.random()]).flat());
-    gl.bindBuffer(gl.ARRAY_BUFFER, boidColourBuffer); gl.bufferData(gl.ARRAY_BUFFER, boids.drawColours, gl.STATIC_DRAW);
-    gl.bindBuffer(gl.ARRAY_BUFFER, boidVertexBuffer); gl.bufferData(gl.ARRAY_BUFFER, params.n * boids.spriteMesh.length, gl.STATIC_DRAW);
+    boids.size = Math.sqrt(params.width * params.width + params.height * params.height) * 0.001 * params.boidSize;
+    // boids.spriteVertices = [
+    //   0.5, 0, 
+    //   -0.5, -0.25, 
+    //   -0.5, 0.25, 
+    // ].map(v => v * boids.size);
+    // boids.spriteIndices = [0, 1, 2];
+    // boids.drawColours = new Float32Array(new Array(params.n).fill().map(() => new Array(boids.spriteVertices.length).fill([Math.random(), Math.random(), Math.random()]).flat()).flat());
+    let sprite = sprites[params.sprite];
+    boids.spriteVertices = sprite.vertices.map(v => v * boids.size); // vertices for one sprite
+    boids.spriteIndices = sprite.indices; // indices for one sprite
+    boids.drawColours = new Array(params.n).fill(0).map(sprite.colourFunction).flat().flat();
+    console.log(boids.spriteVertices);
+    console.log(boids.spriteIndices);
+    console.log(boids.drawColours);
+    gl.bindBuffer(gl.ARRAY_BUFFER, boidColourBuffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(boids.drawColours), gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, boidVertexBuffer); gl.bufferData(gl.ARRAY_BUFFER, params.n * boids.spriteVertices.length, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, boidIndexBuffer); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, params.n * boids.spriteIndices.length, gl.STATIC_DRAW);
 
     // texture setup
     gl.bindTexture(gl.TEXTURE_2D, displacementAoiTexture);
@@ -242,9 +332,6 @@ function main() {
   
   /** set area of influence */
   const aoiVertexBuffer = gl.createBuffer();
-  
-  const circleDetail = 12;
-  const angleInc = Math.PI * 2 / circleDetail;
 
   const drawDisplacementAoiVertexArray = makeVertexArray(gl, [[aoiVertexBuffer, drawDisplacementAoiLocations.vertex, 2, gl.FLOAT]]);
   const drawVelocityAoiVertexArray = makeVertexArray(gl, [[aoiVertexBuffer, drawVelocityAoiLocations.vertex, 2, gl.FLOAT]]);
@@ -252,10 +339,9 @@ function main() {
 
   function drawAoi() {
     // console.log("drawAoi");
-    const circlePoints = new Array(circleDetail + 1).fill(0).map(
-      (x, i) => angleInc * i).map(
-        (a) => [Math.cos(a) * params.aoiRadius, Math.sin(a) * params.aoiRadius]).flat();
-
+    // points around circle
+    const circlePoints = unitCircle.map((v) => v * params.aoiRadius);
+    
     // vertices for centre and points on the circumference
     let circleVertices = new Array(params.n * circleDetail * 3 * 2);
 
@@ -428,7 +514,8 @@ function main() {
 
   function drawBoids() {
     // console.log("drawBoids()");
-    let drawVertices = new Array(params.n * boids.spriteMesh.length);
+    let drawVertices = new Array(params.n * boids.spriteVertices.length);
+    let drawIndices = new Array(params.n * boids.spriteIndices.length);
 
     for (let b = 0; b < params.n; ++b) { // boid b of n
       let i = b * 2;
@@ -437,9 +524,9 @@ function main() {
       let vx = boids.velocities[i];
       let vy = boids.velocities[i + 1];
 
-      let k = b * boids.spriteMesh.length; // index of first x coordinate within boidVertices
-      for (let j = 0; j < boids.spriteMesh.length; j += 2) { // vertex j of 6
-        let v = [boids.spriteMesh[j], boids.spriteMesh[j + 1], 0];
+      let k = b * boids.spriteVertices.length; // index of first x coordinate within boidVertices
+      for (let j = 0; j < boids.spriteVertices.length; j += 2) { // vertex j of 6
+        let v = [boids.spriteVertices[j], boids.spriteVertices[j + 1], 0];
         let u = Vec3.normalise([vx, vy, 0]);
         let v2 = [
           v[0]*u[0] - v[1]*u[1], 
@@ -448,6 +535,11 @@ function main() {
 
         drawVertices[k + j] = px + v2[0];
         drawVertices[k + j + 1] = py + v2[1];
+      }
+
+      let offset = b * boids.spriteVertices.length * 0.5;
+      for (let j = 0; j < boids.spriteIndices.length; j++) {
+        drawIndices[j + b * boids.spriteIndices.length] = boids.spriteIndices[j] + offset;
       }
     }
 
@@ -475,17 +567,25 @@ function main() {
     gl.bindVertexArray(boidVertexArray);
     gl.bindBuffer(gl.ARRAY_BUFFER, boidVertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(drawVertices), gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, boidIndexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(drawIndices), gl.STATIC_DRAW);
 
-    gl.drawArrays(gl.TRIANGLES, 0, params.n * boids.spriteMesh.length * 0.5);
+    // gl.drawArrays(gl.TRIANGLES, 0, params.n * boids.spriteMesh.length * 0.5);
+    gl.drawElements(gl.TRIANGLES, params.n * boids.spriteIndices.length, gl.UNSIGNED_SHORT, 0);
   }
 
   function drawTexture(texture, print = false) {
-    let vWidth = canvas.width;
-    let vHeight = canvas.height;
-    if (params.width > params.height && print == false) {
-      vHeight = vWidth * (params.height / params.width);
-    } else {
-      vWidth = vHeight * (params.width / params.height);
+    let width = canvas.width;
+    let height = canvas.height;
+    if (!print) {
+      let clientAspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+      let outputAspect = params.width / params.height;
+      let correctionFactor = clientAspect / outputAspect;
+      if (clientAspect < outputAspect) {
+        height *= correctionFactor;
+      } else {
+        width /= correctionFactor;
+      }
     }
 
     gl.useProgram(drawTexturesProgram);
@@ -496,7 +596,7 @@ function main() {
     gl.bindTexture(gl.TEXTURE_2D, texture);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, vWidth, vHeight);
+    gl.viewport(print ? 0 : (canvas.width - width) * 0.5, print ? 0 : (canvas.height - height) * 0.5, width, height);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
@@ -508,10 +608,11 @@ function main() {
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
   }
+  clearCanvas();
 
   // simulation functions
   function setSimulation() {
-    console.log("\n<< Simulation reset >>\n\n");
+    console.log("<< Simulation reset >>");
     setParams();
     setVariables();
     clearCanvas();
@@ -519,26 +620,24 @@ function main() {
   }
 
   function step(deltaTime) {
-    console.log("\nstep() deltaTime = " + Math.round(deltaTime * 10000) / 10000);
     drawAoi();
     updateBoids(deltaTime);
     drawBoids();
     drawTexture(outputTexture);
   }
-
-  clearCanvas();
   step(0);
 
+  const fpsIndicator = document.querySelector("#fps");
   let then = 0
   function loop(time) {
     if (!play) {
-      console.log("-+- STOPPED LOOP -+-\n\n\n")
+      console.log("<< STOPPED LOOP >>")
       return;
     }
     let deltaTime = time - then;
     then = time;
 
-    // step(deltaTime * 0.001);
+    fpsIndicator.textContent = "FPS: " + Math.round(1000 / deltaTime);
     step(0.0167);
     
     requestAnimationFrame(loop);
@@ -547,8 +646,9 @@ function main() {
   function keyPress(event) {
     if (event.key == ' ') {
       playPause();
-    } else if (event.key == 'Enter') {
-      showHideSettings();
+    } else if (event.key == 'x') {
+      console.log("back");
+      screenshotWindow.src = "";
     }
   }
 
@@ -556,7 +656,7 @@ function main() {
   function playPause() {
     play = !play;
     if (play) {
-      console.log("\n\n-+- STARTED LOOP -+-")
+      console.log("<< STARTED LOOP >>")
       let time = performance.now();
       then = time;
       loop(time);
@@ -580,15 +680,22 @@ function main() {
     ++i;
   }
 
+  const downloadAnchor = document.querySelector("#download");
   function screenshot() {
     canvas.width = params.width;
     canvas.height = params.height;
     drawTexture(outputTexture, true);
+    console.log(canvas.width, canvas.height);
     canvas.getContext("2d");
     let url = canvas.toDataURL();
-    document.defaultView.open(url);
+    // document.defaultView.open(url);
+    // screenshotWindow.src = url;
+    downloadAnchor.href = url;
+    downloadAnchor.download = "boids_" + [params.width, params.height].join('x') + "_" + [params.n, params.maxAcc, params.minSpeed, params.maxSpeed, params.separationF, params.alignmentF, params.cohesionF, params.aoiRadius, params.trailLength].join('-');
+    downloadAnchor.click();
     canvas.width = gl.canvas.clientWidth;
     canvas.height = gl.canvas.clientHeight;
+    drawTexture(outputTexture);
   }
 }
 

@@ -26,11 +26,13 @@ vec2 euclideanModulo(vec2 n, vec2 m) {
 void main() {
   vec2 texCoord = position / canvasDimensions;
 
+  vec2 newPos;
+
   vec3 displacementData = texture(displacementAoiTexture, texCoord).xyz;
   float boidsInRadius = displacementData.z - 1.0;
   if (boidsInRadius < 1.0) {
     newVelocity = velocity;
-    newPosition = position + velocity * deltaTime;
+    newPosition = euclideanModulo(position + velocity * deltaTime, canvasDimensions);
     return;
   }
   vec3 velocityData = texture(velocityAoiTexture, texCoord).xyz;
@@ -51,7 +53,7 @@ void main() {
   if (accMag > maxAcc) {
     acc *= maxAcc / accMag;
   }
-  newVelocity = velocity + (acc) * deltaTime;
+  newVelocity = velocity + acc * deltaTime;
   float speed = length(newVelocity);
   if (speed < minSpeed) {
     newVelocity *= minSpeed / speed;
@@ -59,7 +61,7 @@ void main() {
   if (speed > maxSpeed) {
     newVelocity *= maxSpeed / speed;
   }
-  
+
   newPosition = euclideanModulo(position + newVelocity * deltaTime, canvasDimensions);
 }
 `;
@@ -148,7 +150,7 @@ out vec2 texCoord;
 
 void main() {
   gl_Position = vec4(position, 0, 1);
-  texCoord = (position + 1.0) * 0.5 ;
+  texCoord = (position + 1.0) * 0.5 * vec2(1, -1);
 }
 `
 

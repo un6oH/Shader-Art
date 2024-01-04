@@ -7,9 +7,8 @@
       body {
         margin: 0;
         padding: 0;
-        background-color: darkgray;
+        background-color: #202020;
       }
-
       canvas {
         width: 100vw;
         height: 100vh;
@@ -23,8 +22,22 @@
         z-index: 1;
       }
 
+      iframe {
+        position: fixed;
+        /* top: 90vh;
+        left: 90vw; */
+        width: 100vw;
+        height: 100vh;
+        border: 0;
+        z-index: -1;
+      }
+
       p {
         margin-bottom: 0px;
+      }
+
+      #download {
+        opacity: 0;
       }
 
     </style>
@@ -40,39 +53,47 @@
   </head>
 
   <body>
-    <canvas id="gl-canvas"></canvas>
     <div id="parameter-container">
-      <p>Controls:</p>
-      <ul>
-        <li>Enter: show/hide UI</li>
-        <li>Space: start/stop simulation</li>
-      </ul>
+      <p id="fps">FPS: </p>
+      <p>Start/stop simulation: space</p>
       <button id="reset" type="button">Reset</button>
       <button id="screenshot" type="button">Screenshot</button>
-      <p>Resolution: </p>
-      <input id="width" type="number" value="1920" min="100">
+      <p>Resolution *: </p>
+      <input id="width" type="number" value="1080" min="100"> <br/>
       <input id="height" type="number" value="1080" min="100">
-      <p>Number of boids: </p>
-      <input id="n" type="number" value="100" min="0">
+      <p>Number of boids *: </p>
+      <input id="n" type="number" value="200" min="0" step="10">
       <p>Max acceleration: </p>
-      <input id="maxAcc" type="number" value="50" min="0">
+      <input id="maxAcc" type="number" value="500" min="0" step="10">
       <p>Min speed: </p>
-      <input id="minSpeed" type="number" value="50" min="0">
+      <input id="minSpeed" type="number" value="150" min="0" step="10">
       <p>Max speed: </p>
-      <input id="maxSpeed" type="number" value="100" min="0">
+      <input id="maxSpeed" type="number" value="300" min="0" step="10">
       <p>Separation factor: <output id="separationFValue"></output></p>
-      <input id="separationF" type="range" value="1" min="0" max="5" step="0.01">
+      <input id="separationF" type="range" value="1" min="0" max="10" step="0.1">
       <p>Alignment factor: <output id="alignmentFValue"></output></p>
-      <input id="alignmentF" type="range" value="1" min="0" max="5" step="0.01">
+      <input id="alignmentF" type="range" value="1" min="0" max="10" step="0.1">
       <p>Cohesion factor: <output id="cohesionFValue"></output></p>
-      <input id="cohesionF" type="range" value="1" min="0" max="5" step="0.01">
+      <input id="cohesionF" type="range" value="1" min="0" max="10" step="0.1">
       <p>Vision radius: </p>
-      <input id="aoiRadius" type="number" value="50" min="0">
-      <p>Boid size: </p>
-      <input id="boidSize" type="number" value="15" min="1">
+      <input id="aoiRadius" type="number" value="50" min="0" step="10">
+      <p>Boid size *: </p>
+      <input id="boidSize" type="number" value="20" min="1">
       <p>Trail length: </p>
       <input id="trailLength" type="number" value="0" min="0">
+      <p>Boid sprite *: </p>
+      <select id="sprite">
+        <option value="wedgeWhite">Wedge (white)</option>
+        <option value="wedgeSolid">Wedge (solid colour)</option>
+        <option value="wedgeGradient">Wedge (gradient)</option>
+        <option value="circleWhite">Circle (white)</option>
+        <option value="circleSolid">Circle (solid colour)</option>
+        <option value="circleGradient">Circle (gradient)</option>
+      </select>
+      <p>*: requires reset</p>
+      <a id="download">download link</a>
     </div>
+    <canvas id="gl-canvas"></canvas>
   </body>
 
   <script src="../boids/boids.js"></script>
