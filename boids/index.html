@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Shader art</title>
+    <title>Boids</title>
     <style>
       body {
         margin: 0;
@@ -16,24 +16,17 @@
       }
 
       #parameter-container {
+        padding-left: 1ex;
         color: white;
         position: fixed;
         font-family: sans-serif;
         z-index: 1;
-      }
-
-      iframe {
-        position: fixed;
-        /* top: 90vh;
-        left: 90vw; */
-        width: 100vw;
-        height: 100vh;
-        border: 0;
-        z-index: -1;
+        text-shadow: 1px 1px 0px gray;
       }
 
       p {
-        margin-bottom: 0px;
+        margin-top: 1ex;
+        margin-bottom: 0.2ex;
       }
 
       #download {
@@ -41,11 +34,11 @@
       }
 
     </style>
-    <link rel="icon" type="image/bmp" href="../favicon.bmp" />
+    <link rel="icon" type="image/bmp" href="./boids_icon.png" />
 
     <!-- libraries -->
     <script src="../matrix-math.js"></script>
-    <script src="../twgl-full.min.js" type="text/js"></script>
+    <script src="../gl-helpers.js"></script>
 
     <!-- shaders -->
     <script src="../boids/vertex-shader.js"></script>
@@ -55,14 +48,14 @@
   <body>
     <div id="parameter-container">
       <p id="fps">FPS: </p>
-      <p>Start/stop simulation: space</p>
+      <p>Start/stop: space</p>
       <button id="reset" type="button">Reset</button>
-      <button id="screenshot" type="button">Screenshot</button>
+      <button id="screenshot" type="button">Save image</button>
       <p>Resolution *: </p>
       <input id="width" type="number" value="1080" min="100"> <br/>
       <input id="height" type="number" value="1080" min="100">
       <p>Number of boids *: </p>
-      <input id="n" type="number" value="200" min="0" step="10">
+      <input id="n" type="number" value="200" min="0" step="50">
       <p>Max acceleration: </p>
       <input id="maxAcc" type="number" value="500" min="0" step="10">
       <p>Min speed: </p>
@@ -76,11 +69,11 @@
       <p>Cohesion factor: <output id="cohesionFValue"></output></p>
       <input id="cohesionF" type="range" value="1" min="0" max="10" step="0.1">
       <p>Vision radius: </p>
-      <input id="aoiRadius" type="number" value="50" min="0" step="10">
+      <input id="aoiRadius" type="number" value="250" min="0" step="50">
       <p>Boid size *: </p>
       <input id="boidSize" type="number" value="20" min="1">
       <p>Trail length: </p>
-      <input id="trailLength" type="number" value="0" min="0">
+      <input id="trailLength" type="number" value="10" min="0">
       <p>Boid sprite *: </p>
       <select id="sprite">
         <option value="wedgeWhite">Wedge (white)</option>
