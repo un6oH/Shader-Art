@@ -7,6 +7,16 @@
       body {
         margin: 0;
         padding: 0;
+        background-color: #202020;
+      }
+
+      #controls-container {
+        padding: 1ex;
+        color: white;
+        font-family: sans-serif;
+        z-index: 1;
+        text-shadow: 1px 1px 0px gray;
+        position: fixed;
       }
 
       canvas {
@@ -19,7 +29,7 @@
 
     <!-- libraries -->
     <script src="../matrix-math.js"></script>
-    <script src="../twgl-full.min.js" type="text/js"></script>
+    <script src="../gl-helpers.js"></script>
 
     <!-- shaders -->
     <script src="vertex-shader.js"></script>
@@ -27,6 +37,14 @@
   </head>
 
   <body>
+    <div id="controls-container">
+      <button id="reset">Reset</button>
+      <button id="playpause">Play/Pause</button>
+      <button id="screenshot">Save image</button>
+      <p>Frames per second: <output id="fps-output"></output></p>
+      <input id="fps" type="range" value="10" min="1" max="60" step="1">
+      <a id="download-link"></a>
+    </div>
     <canvas id="gl-canvas"></canvas>
   </body>
 

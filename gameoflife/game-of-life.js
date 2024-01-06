@@ -1,7 +1,7 @@
 function render(image) {
   // initialise canvas
   const canvas = document.querySelector("#gl-canvas");
-  const gl = canvas.getContext("webgl");
+  const gl = canvas.getContext("webgl2");
   if (!gl) { 
     alert("Unable to initialise WebGL"); 
     return; 
@@ -10,213 +10,172 @@ function render(image) {
   // set canvas size to client canvas size
   canvas.width = gl.canvas.clientWidth;
   canvas.height = gl.canvas.clientHeight;
+  const gridWidth = image.width;
+  const gridHeight = image.height;
+  console.log("Simulating " + gridWidth + ", " + gridHeight + " grid");
 
-  // initialise program
-  const vertexShaderSource = VERTEX_SHADER;
-  const fragmentShaderSource = FRAGMENT_SHADER;
-  const program = createProgram(gl, vertexShaderSource, fragmentShaderSource);
+  // program
+  const updateProgram = createProgram(gl, TEXTURE_VS, UPDATE_FS);
+  const updateProgramLocations = createLocations(gl, updateProgram, ["position"], ["invertTexture", "grid", "gridSize"]);
 
-  // set texture size to input image size
-  const textureWidth = image.width;
-  const textureHeight = image.height;
-  const wrapTexture = false;
+  const displayProgram = createProgram(gl, TEXTURE_VS, DRAW_TEXTURE_FS);
+  const displayProgramLocations = createLocations(gl, displayProgram, ["position"], ["invertTexture", "image"])
 
-  console.log("Simulating " + textureWidth + ", " + textureHeight + " grid, output to " + canvas.width + ", " + canvas.height + " canvas")
+  // buffers and vertex array
+  const positionBuffer = makeBuffer(gl, new Float32Array([
+    0, 0, 1, 0, 1, 1, 
+    0, 0, 1, 1, 0, 1
+  ]), gl.STATIC_DRAW);
+  const updateVertexArray = makeVertexArray(gl, [[positionBuffer, updateProgramLocations.position, 2, gl.FLOAT]]);
+  const displayVertexArray = makeVertexArray(gl, [[positionBuffer, displayProgramLocations.position, 2, gl.FLOAT]]);
 
-  // buffers
-  const positionBuffer = gl.createBuffer(gl.ARRAY_BUFFER);
-  const texCoordBuffer = gl.createBuffer(gl.ARRAY_BUFFER);
-
-  // get data locations
-  const positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-  const texCoordAttributeLocation = gl.getAttribLocation(program, "a_texCoord");
-  
-  const canvasResolutionUniformLocation = gl.getUniformLocation(program, "u_canvasResolution");
-  const textureResolutionUniformLocation = gl.getUniformLocation(program, "u_textureResolution");
-  const updateCellsUniformLocation = gl.getUniformLocation(program, "u_updateCells");
-  const displayUniformLocation = gl.getUniformLocation(program, "u_display");
-  
-  //
-  // render time
-  //
-  // set up canvas
-  gl.useProgram(program);
-
-  // position pointer
-  gl.enableVertexAttribArray(positionAttributeLocation);
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-  gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
-
-  // texture coordinate pointer
-  gl.enableVertexAttribArray(texCoordAttributeLocation);
-  gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-  gl.vertexAttribPointer(texCoordAttributeLocation, 2, gl.FLOAT, false, 0, 0);
-  
-  // create framebuffers and textures
-  const originalImageTexture = createAndSetupTexture(gl);
+  // framebuffers and textures
+  const originalImageTexture = createTexture(gl);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image); // put image.png in the texture;
   
   const textures = [];
   const framebuffers = [];
   for (let i = 0; i < 2; ++i) {
-    let texture = createAndSetupTexture(gl, wrapTexture);
+    let texture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gridWidth, gridHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
     textures.push(texture);
-    gl.texImage2D(
-      gl.TEXTURE_2D, 0, gl.RGBA, textureWidth, textureHeight, 0,
-      gl.RGBA, gl.UNSIGNED_BYTE, null);
       
-    let framebuffer = gl.createFramebuffer();
+    let framebuffer = createFramebuffer(gl, texture);
     framebuffers.push(framebuffer);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-    
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
   }
 
-  // set resolution uniforms
-  gl.uniform2f(canvasResolutionUniformLocation, canvas.width, canvas.height);
-  gl.uniform2f(textureResolutionUniformLocation, textureWidth, textureHeight);
+  // initialise texture with input image
+  function initialise() {
+    gl.useProgram(displayProgram);
+    
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffers[0]);
+    gl.viewport(0, 0, gridWidth, gridHeight);
 
-  //
-  // draw
-  //
-  gl.clearColor(0, 0, 0, 1);
+    gl.bindVertexArray(displayVertexArray);
+    gl.bindTexture(gl.TEXTURE_2D, originalImageTexture);
+    gl.uniform1i(displayProgramLocations.invertTexture, 1);
 
-  // load initial texture
-  initialise();
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-  // display original texture
-  draw();
+    step = 0;
+  }
+
+  function update() {
+    gl.useProgram(updateProgram);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffers[(step + 1) % 2]);
+    gl.viewport(0, 0, gridWidth, gridHeight);
+
+    gl.bindVertexArray(updateVertexArray);
+    gl.bindTexture(gl.TEXTURE_2D, textures[step % 2]);
+    gl.uniform2f(updateProgramLocations.gridSize, gridWidth, gridHeight);
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    step ++;
+  }
+
+  function display(print) {
+    let width = canvas.width;
+    let height = canvas.height;
+    if (!print) {
+      let clientAspect = canvas.width / canvas.height;
+      let outputAspect = gridWidth / gridHeight;
+      let correctionFactor = clientAspect / outputAspect;
+      if (clientAspect < outputAspect) {
+        height *= correctionFactor;
+      } else {
+        width /= correctionFactor;
+      }
+    }
+
+    gl.useProgram(displayProgram);
+    
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport((canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+
+    gl.bindVertexArray(displayVertexArray);
+    gl.bindTexture(gl.TEXTURE_2D, textures[step % 2]);
+    
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
 
   // animation 
-  const framesPerUpdate = 1;
+  let framesPerUpdate = 6;
   let frame = 1;
   let step = 0;
+  let play = false;
   requestAnimationFrame(animate);
   function animate() {
+    if (!play) {
+      return;
+    }
+
     if (frame % framesPerUpdate === 0) {
       // update cells by drawing to a framebuffer
       update();
       
       // draw to canvas
-      draw();
+      display(false);
     }
 
     frame ++;
     requestAnimationFrame(animate);
   }
-
-  // initialise texture with input image
-  function initialise() {
-    setFramebuffer(framebuffers[1], textureWidth, textureHeight);
-    gl.bindTexture(gl.TEXTURE_2D, originalImageTexture);
-    gl.uniform1i(updateCellsUniformLocation, 0);
-    gl.uniform1i(displayUniformLocation, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    setRectangle(gl, 0, 0, image.width, image.height);
-    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-    setRectangle(gl, 0, 0, 1, 1);
-
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-    gl.bindTexture(gl.TEXTURE_2D, textures[1]);
-  }
-
-  function update() {
-    // console.log("update()");
-
-    setFramebuffer(framebuffers[step % 2], textureWidth, textureHeight);
-    gl.uniform1i(updateCellsUniformLocation, 1);
-    gl.uniform1i(displayUniformLocation, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    setRectangle(gl, 0, 0, textureWidth, textureHeight);
-    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-    setRectangle(gl, 0, 0, 1, 1);
-
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-    gl.bindTexture(gl.TEXTURE_2D, textures[step % 2]);
-
-    step ++;
-  }
-
-  // display to canvas
-  function draw() {
-    setFramebuffer(null, canvas.width, canvas.height);
-    gl.uniform1i(updateCellsUniformLocation, 0);
-    gl.uniform1i(displayUniformLocation, 1);
-    
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    setRectangle(gl, 0, 0, canvas.width, canvas.height);
-    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-    setRectangle(gl, 0, 0, 1, 1);
-    
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-  }
   
-  // set framebuffer and viewport
-  function setFramebuffer(fbo, width, height) { 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-    gl.viewport(0, 0, width, height);
-    gl.clear(gl.COLOR_BUFFER_BIT);
+  function reset() {
+    initialise();
+    display(false);
+    play = false;
   }
-}
+  reset();
 
-function createShader(gl, type, source) {
-  let shader = gl.createShader(type);
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  let success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
-  if (success) { return shader; }
+  //
+  // interactivity
+  //
+  const downloadAnchor = document.querySelector("#download-link");
+  function screenshot() {
+    canvas.width = gridWidth;
+    canvas.height = gridHeight;
+    display(true);
+    let url = canvas.toDataURL();
+    downloadAnchor.href = url;
+    downloadAnchor.download = "game of life_" + [gridWidth, gridHeight].join('x');
+    downloadAnchor.click();
+    canvas.width = gl.canvas.clientWidth;
+    canvas.height = gl.canvas.clientHeight;
+    display(false);
+  }
 
-  console.log(gl.getShaderInfoLog(shader));
-  gl.deleteShader(shader);
-}
+  const resetButton = document.querySelector("#reset");
+  const playToggle = document.querySelector("#playpause");
+  const fpsInput = document.querySelector("#fps");
+  const fpsOutput = document.querySelector("#fps-output");
+  const screenshotButton = document.querySelector("#screenshot");
+  fpsOutput.textContent = fpsInput.value;
 
-function createProgram(gl, vertexShaderSource, fragmentShaderSource) {
-  let vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-  let fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
-  
-  let program = gl.createProgram();
-  gl.attachShader(program, vertexShader);
-  gl.attachShader(program, fragmentShader);
-  gl.linkProgram(program);
-  let success = gl.getProgramParameter(program, gl.LINK_STATUS);
-  if (success) { return program; }
+  resetButton.addEventListener('click', reset);
+  playToggle.addEventListener('click', () => {
+    play = !play;
+    if (play) {
+      animate();
+    }
+  });
+  screenshotButton.addEventListener('click', screenshot);
 
-  console.log(gl.getProgramInfoLog(program));
-  gl.deleteProgram(program);
-}
+  fpsInput.addEventListener('input', () => {
+    framesPerUpdate = Math.floor(60 / parseFloat(fpsInput.value));
+    fpsOutput.textContent = fpsInput.value;
+  });
 
-function setRectangle(gl, x, y, width, height) {
-  let x1 = x;
-  let y1 = y;
-  let x2 = x + width;
-  let y2 = y + height;
-  gl.bufferData(
-    gl.ARRAY_BUFFER,
-    new Float32Array([
-      x1, y1, 
-      x2, y1, 
-      x2, y2, 
-      x1, y1, 
-      x2, y2, 
-      x1, y2
-    ]),
-    gl.STATIC_DRAW);
-}
-
-function createAndSetupTexture(gl, wrapTexture) {
-  let texture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrapTexture ? gl.REPEAT : gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrapTexture ? gl.REPEAT : gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-  return texture;
+  document.addEventListener('keypress', (event) => {
+    if (event.key == ' ') {
+      play = !play;
+      if (play) {
+        animate();
+      }
+    }
+  })
 }
 
 function main() {
