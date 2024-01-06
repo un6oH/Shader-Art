@@ -686,10 +686,7 @@ function main() {
     canvas.height = params.height;
     drawTexture(outputTexture, true);
     console.log(canvas.width, canvas.height);
-    canvas.getContext("2d");
     let url = canvas.toDataURL();
-    // document.defaultView.open(url);
-    // screenshotWindow.src = url;
     downloadAnchor.href = url;
     downloadAnchor.download = "boids_" + [params.width, params.height].join('x') + "_" + [params.n, params.maxAcc, params.minSpeed, params.maxSpeed, params.separationF, params.alignmentF, params.cohesionF, params.aoiRadius, params.trailLength].join('-');
     downloadAnchor.click();
