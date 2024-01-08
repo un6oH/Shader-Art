@@ -1,266 +1,181 @@
-function render(images) {
+function render(image) {
   // initialise canvas
   const canvas = document.querySelector("#gl-canvas");
-  const gl = canvas.getContext("webgl");
+  const gl = canvas.getContext("webgl2");
   if (!gl) { 
     alert("Unable to initialise WebGL"); 
     return; 
   }
+
+  const params = {
+    deltaTime: 0.0167, 
+    cellRadius: 10, 
+    neighbourRadius: 30, 
+    birthLower: 0.31, 
+    birthUpper: 0.45, 
+    deathLower: 0.25, 
+    deathUpper: 0.5, 
+    transitionSmoothRadius: 0.1, 
+    lifeSmoothRadius: 0.1,
+  }
+  const textureWidth = image.width;
+  const textureHeight = image.height;
+
+  const inputs = {};
+  for (let parameter in params) {
+    let input = document.getElementById(parameter)
+    input.addEventListener('input', () => {
+      params[parameter] = parseFloat(input.value);
+    });
+    inputs[parameter] = input;
+  }
+  for (let parameter of ["deltaTime", "birthLower", "birthUpper", "deathLower", "deathUpper", "transitionSmoothRadius", "lifeSmoothRadius"]) {
+    let output = document.getElementById(parameter + "Output");
+    let input = inputs[parameter];
+    output.textContent = input.value;
+    input.addEventListener('input', () => {
+      output.textContent = input.value;
+    });
+  }
+  
 
   // set canvas size to client canvas size
   canvas.width = gl.canvas.clientWidth;
   canvas.height = gl.canvas.clientHeight;
 
   // initialise program
-  const vertexShaderSource = VERTEX_SHADER;
-  const fragmentShaderSource = FRAGMENT_SHADER;
-  const program = createProgram(gl, vertexShaderSource, fragmentShaderSource);
-
-  // image references
-  const inputImage = images[0];
-
-  // set texture size to input image size
-  const textureWidth = inputImage.width;
-  const textureHeight = inputImage.height;
-  const wrapTexture = false;
+  const updateProgram = createProgram(gl, TEXTURE_VS, UPDATE_FS);
+  const updateProgramLocations = createLocations(gl, updateProgram, 
+    ["position"], 
+    ["flipTexture", "image", "deltaTime", "textureDimensions", "cellRadius", "neighbourRadius", "birthLower", "birthUpper", "deathLower", "deathUpper", "transitionSmoothRadius", "lifeSmoothRadius"]
+  );
+  
+  const displayProgram = createProgram(gl, TEXTURE_VS, DISPLAY_FS);
+  const displayProgramLocations = createLocations(gl, displayProgram, ["position"], ["flipTexture", "image"]);
 
 
   // buffers
   const positionBuffer = gl.createBuffer(gl.ARRAY_BUFFER);
-  const texCoordBuffer = gl.createBuffer(gl.ARRAY_BUFFER);
+  setupBuffer(gl, positionBuffer, new Float32Array([
+    0, 0, 1, 0, 1, 1, 
+    0, 0, 1, 1, 0, 1
+  ]), gl.STATIC_DRAW);
 
-  // get data locations
-  const positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-  const texCoordAttributeLocation = gl.getAttribLocation(program, "a_texCoord");
-  
-  const canvasResolutionUniformLocation = gl.getUniformLocation(program, "u_canvasResolution");
-  const textureSizeUniformLocation = gl.getUniformLocation(program, "u_textureSize");
-  const updateCellsUniformLocation = gl.getUniformLocation(program, "u_updateCells");
-  const deltaTimeUniformLocation = gl.getUniformLocation(program, "u_deltaTimeSeconds");
+  // vertex arrays
+  const updateVertexArray = makeVertexArray(gl, [[positionBuffer, updateProgramLocations.position, 2, gl.FLOAT]]);
+  const displayVertexArray = makeVertexArray(gl, [[positionBuffer, displayProgramLocations.position, 2, gl.FLOAT]]);
 
-  const displayUniformLocation = gl.getUniformLocation(program, "u_display");
-
-  const imageUniformLocation = gl.getUniformLocation(program, "u_image");
-  
-  //
-  // render time
-  //
-  // set up canvas
-  gl.useProgram(program);
-
-  // position pointer
-  gl.enableVertexAttribArray(positionAttributeLocation);
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-  gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
-
-  // texture coordinate pointer
-  gl.enableVertexAttribArray(texCoordAttributeLocation);
-  gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-  gl.vertexAttribPointer(texCoordAttributeLocation, 2, gl.FLOAT, false, 0, 0);
-  
-  // textures
-  const inputImageTexture = createAndSetupTexture(gl, wrapTexture);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, inputImage); // put image.png in the texture;
-  
   // bind textures to framebuffers
   const textures = [];
   const framebuffers = [];
   for (let i = 0; i < 2; ++i) {
-    let texture = createAndSetupTexture(gl, wrapTexture);
+    let texture = createTexture(gl);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, textureWidth, textureHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
     textures.push(texture);
-    gl.texImage2D(
-      gl.TEXTURE_2D, 0, gl.RGBA, textureWidth, textureHeight, 0,
-      gl.RGBA, gl.UNSIGNED_BYTE, null);
       
-    let framebuffer = gl.createFramebuffer();
+    let framebuffer = createFramebuffer(gl, texture);
     framebuffers.push(framebuffer);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-    
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-  }
-
-  // set resolution uniforms
-  gl.uniform2f(canvasResolutionUniformLocation, canvas.width, canvas.height);
-  gl.uniform2f(textureSizeUniformLocation, textureWidth, textureHeight);
-
-  // set texture units
-  gl.uniform1i(imageUniformLocation, 0);
-  gl.activeTexture(gl.TEXTURE0); // set texture unit to 0 for simulations
-
-  //
-  // draw
-  //
-  gl.clearColor(0, 0, 0, 1);
-
-  // load initial texture
-  initialise();
-
-  // display original texture
-  draw();
-
-  // animation 
-  const framesPerUpdate = 1;
-  let frame = 1;
-  let step = 0;
-  let deltaTime = 0.05;
-  gl.uniform1f(deltaTimeUniformLocation, deltaTime);
-  requestAnimationFrame(animate);
-  function animate() {
-    if (frame % framesPerUpdate === 0) {
-      // update cells by drawing to a framebuffer
-      update();
-      
-      // draw to canvas
-      draw();
-    }
-
-    frame ++;
-    requestAnimationFrame(animate);
   }
 
   // initialise texture with input image
   function initialise() {
-    setFramebuffer(framebuffers[1], textureWidth, textureHeight);
-    gl.bindTexture(gl.TEXTURE_2D, inputImageTexture);
-    gl.uniform1i(updateCellsUniformLocation, 0);
-    gl.uniform1i(displayUniformLocation, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    setRectangle(gl, 0, 0, textureWidth, textureHeight);
-    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-    setRectangle(gl, 0, 0, textureWidth, textureHeight);
-
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-    gl.bindTexture(gl.TEXTURE_2D, textures[1]);
+    gl.bindTexture(gl.TEXTURE_2D, textures[0]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    step = 0;
   }
 
   function update() {
-    // console.log("update()");
+    gl.useProgram(updateProgram);
+    setFramebuffer(gl, framebuffers[(step + 1) % 2], textureWidth, textureHeight);
 
-    setFramebuffer(framebuffers[step % 2], textureWidth, textureHeight);
-    gl.uniform1i(updateCellsUniformLocation, 1);
-    gl.uniform1i(displayUniformLocation, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    setRectangle(gl, 0, 0, textureWidth, textureHeight);
-    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-    setRectangle(gl, 0, 0, textureWidth, textureHeight);
+    gl.bindVertexArray(updateVertexArray);
+    gl.uniform1i(updateProgramLocations.flipTexture, false);
+    gl.bindTexture(gl.TEXTURE_2D, textures[step % 2]);
+    gl.uniform2f(updateProgramLocations.textureDimensions, textureWidth, textureHeight);
+    for (let parameter in params) {
+      gl.uniform1f(updateProgramLocations[parameter], params[parameter]);
+    }
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-    gl.bindTexture(gl.TEXTURE_2D, textures[step % 2]);
 
     step ++;
   }
 
   // display to canvas
-  function draw() {
-    setFramebuffer(null, canvas.width, canvas.height);
-    gl.uniform1i(updateCellsUniformLocation, 0);
-    gl.uniform1i(displayUniformLocation, 1);
-    
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    setRectangle(gl, 0, 0, canvas.width, canvas.height);
-    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-    setRectangle(gl, 0, 0, textureWidth, textureHeight);
+  function display(print = false) {
+    let width = canvas.width;
+    let height = canvas.height;
+    if (!print) {
+      let clientAspect = canvas.width / canvas.height;
+      let outputAspect = textureWidth / textureHeight;
+      let correctionFactor = clientAspect / outputAspect;
+      if (clientAspect < outputAspect) {
+        height *= correctionFactor;
+      } else {
+        width /= correctionFactor;
+      }
+    }
+
+    gl.useProgram(displayProgram);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport((canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+
+    gl.bindVertexArray(displayVertexArray);
+    gl.uniform1i(displayProgramLocations.flipTexture, true);
+    gl.bindTexture(gl.TEXTURE_2D, textures[step % 2]);
     
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
-  
-  // set framebuffer and viewport
-  function setFramebuffer(fbo, width, height) { 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-    gl.viewport(0, 0, width, height);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-  }
-}
 
-function createShader(gl, type, source) {
-  let shader = gl.createShader(type);
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  let success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
-  if (success) { return shader; }
-
-  console.log(gl.getShaderInfoLog(shader));
-  gl.deleteShader(shader);
-}
-
-function createProgram(gl, vertexShaderSource, fragmentShaderSource) {
-  let vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-  let fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
-  
-  let program = gl.createProgram();
-  gl.attachShader(program, vertexShader);
-  gl.attachShader(program, fragmentShader);
-  gl.linkProgram(program);
-  let success = gl.getProgramParameter(program, gl.LINK_STATUS);
-  if (success) { return program; }
-
-  console.log(gl.getProgramInfoLog(program));
-  gl.deleteProgram(program);
-}
-
-function setRectangle(gl, x, y, width, height) {
-  let x1 = x;
-  let y1 = y;
-  let x2 = x + width;
-  let y2 = y + height;
-  gl.bufferData(
-    gl.ARRAY_BUFFER,
-    new Float32Array([
-      x1, y1, 
-      x2, y1, 
-      x2, y2, 
-      x1, y1, 
-      x2, y2, 
-      x1, y2
-    ]),
-    gl.STATIC_DRAW);
-}
-
-function createAndSetupTexture(gl, wrapTexture = false) {
-  let texture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrapTexture ? gl.REPEAT : gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrapTexture ? gl.REPEAT : gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-  return texture;
-}
-
-function loadImage(url, callback) {
-  let image = new Image();
-  image.src = url;
-  image.onload = callback;
-  return image;
-}
-
-function loadImages(urls, callback) {
-  let images = [];
-  let imagesToLoad = urls.length;
-
-  const onImageLoad = () => {
-    --imagesToLoad;
-
-    if (imagesToLoad == 0) {
-      callback(images);
+  // animation 
+  let step = 0;
+  let play = false;
+  initialise();
+  display();
+  function animate() {
+    if (!play) {
+      return;
     }
+    update();
+    display();
+    requestAnimationFrame(animate);
   }
 
-  for (let i = 0; i < imagesToLoad; ++i) {
-    let image = loadImage(urls[i], onImageLoad);
-    images.push(image);
+  const downloadAnchor = document.getElementById("download-anchor");
+  function screenshot() {
+    canvas.width = textureWidth;
+    canvas.height = textureHeight;
+    display(true);
+    let url = canvas.toDataURL();
+    downloadAnchor.href = url;
+    downloadAnchor.download = "smoothLife_" + [textureWidth, textureHeight].join('x') + "_" + Object.values(params).join('-');
+    downloadAnchor.click();
+    canvas.width = gl.canvas.clientWidth;
+    canvas.height = gl.canvas.clientHeight;
+    display();
   }
+
+  const resetButton = document.getElementById("reset");
+  resetButton.addEventListener('click', () => {
+    initialise();
+    display();
+    play = false;
+  });
+  const playButton = document.getElementById("playpause");
+  playButton.addEventListener('click', () => {
+    play = !play;
+    if (play) {
+      requestAnimationFrame(animate);
+    }
+  });
+  const screenshotButton = document.getElementById("screenshot");
+  screenshotButton.addEventListener('click', screenshot);
 }
 
 function main() {
-  loadImages([
-    "../image.png",
-  ], render);
+  let image = new Image();
+  image.src = "image.png";
+  image.onload = () => render(image);
 }
 
 main();

@@ -1,30 +1,14 @@
-const VERTEX_SHADER = `
+const TEXTURE_VS = `#version 300 es
 precision mediump float;
 
-attribute vec2 a_position;
-attribute vec2 a_texCoord;
+in vec2 position; // (0, 0) to (1, 1)
 
-uniform vec2 u_textureSize;
-uniform vec2 u_canvasResolution;
-uniform bool u_display;
+uniform bool flipTexture;
 
-varying vec2 v_texCoord;
+out vec2 texCoord;
 
 void main() {
-  if (u_display) {
-    vec2 normPosition = a_position / u_canvasResolution;
-    vec2 clipSpace = normPosition * 2.0 - 1.0;
-
-    gl_Position = vec4(clipSpace * vec2(1.0, -1.0), 0.0, 1.0);
-    
-    v_texCoord = a_texCoord;
-  } else {
-    vec2 normPosition = a_position / u_textureSize;
-    vec2 clipSpace = normPosition * 2.0 - 1.0;
-
-    gl_Position = vec4(clipSpace, 0.0, 1.0);
-    
-    v_texCoord = a_texCoord;
-  }
+  gl_Position = vec4(position * 2.0 - 1.0, 0, 1);
+  texCoord = flipTexture ? position * vec2(1, -1) + vec2(0, 1) : position;
 }
 `

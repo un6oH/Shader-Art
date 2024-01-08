@@ -7,6 +7,20 @@
       body {
         margin: 0;
         padding: 0;
+        background-color: #202020;
+      }
+
+      #parameter-container {
+        position: fixed;
+        font-family: sans-serif;
+        color: white;
+        z-index: 1;
+        padding: 1ex;
+      }
+
+      p {
+        margin-top: 1ex;
+        margin-bottom: 0.5ex;
       }
 
       canvas {
@@ -16,6 +30,8 @@
       }
     </style>
     <link rel="icon" type="image/bmp" href="../favicon.bmp" />
+    <script src="../matrix-math.js"></script>
+    <script src="../gl-helpers.js"></script>
 
     <!-- shaders -->
     <script src="vertex-shader.js"></script>
@@ -23,7 +39,31 @@
   </head>
 
   <body>
+    <div id="parameter-container">
+      <button id="reset">Reset</button>
+      <button id="playpause">Play/Pause</button>
+      <button id="screenshot">Save Image</button>
+      <p>Time step: <output id="deltaTimeOutput"></output></p>
+      <input id="deltaTime" type="range" value="0.0167" min="0" max="0.1" step="0.0001">
+      <p>Cell radius: <output id="cellRadiusOutput"></output></p>
+      <input id="cellRadius" type="number" value="10" min="0.5">
+      <p>Neighbour radius: <output id="neighbourRadiusOutput"></output></p>
+      <input id="neighbourRadius" type="number" value="30" min="1.5">
+      <p>Birth lower threshold: <output id="birthLowerOutput"></output></p>
+      <input id="birthLower" type="range" value="0.3" min="0" max="1" step="0.01">
+      <p>Birth upper threshold: <output id="birthUpperOutput"></output></p>
+      <input id="birthUpper" type="range" value="0.45" min="0" max="1" step="0.01">
+      <p>Death lower threshold: <output id="deathLowerOutput"></output></p>
+      <input id="deathLower" type="range" value="0.25" min="0" max="1" step="0.01">
+      <p>Death upper threshold: <output id="deathUpperOutput"></output></p>
+      <input id="deathUpper" type="range" value="0.5" min="0" max="1" step="0.01">
+      <p>Transition smooth radius: <output id="transitionSmoothRadiusOutput"></output></p>
+      <input id="transitionSmoothRadius" type="range" value="0.1" min="0" max="1" step="0.001">
+      <p>Life smooth radius: <output id="lifeSmoothRadiusOutput"></output></p>
+      <input id="lifeSmoothRadius" type="range" value="0.1" min="0" max="1" step="0.001">      
+    </div>
     <canvas id="gl-canvas"></canvas>
+    <a id="download-anchor"></a>
   </body>
 
   <script src="smooth-life.js"></script>

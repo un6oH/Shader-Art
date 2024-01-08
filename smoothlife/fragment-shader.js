@@ -1,30 +1,24 @@
-const FRAGMENT_SHADER = `
+const UPDATE_FS = `#version 300 es
 precision mediump float;
 
-uniform sampler2D u_image;
-uniform bool u_updateCells;
-uniform float u_deltaTimeSeconds;
+in vec2 texCoord; // (0, 0) to (1, 1)
 
-// simulation parameters
-uniform vec2 u_textureSize;
+uniform sampler2D image;
+uniform vec2 textureDimensions;
+uniform float deltaTime;
+uniform float cellRadius;
+uniform float neighbourRadius;
+uniform float birthLower;
+uniform float birthUpper;
+uniform float deathLower;
+uniform float deathUpper;
+uniform float transitionSmoothRadius;
+uniform float lifeSmoothRadius;
 
-varying vec2 v_texCoord;
-
-const float cellRadius = 10.0;
-const float neighbourRadius = cellRadius * 3.0;
-
-float b1 = 0.250; // death -> life interval lower
-float b2 = 0.30; // death -> life interval upper
-float d1 = 0.32; // life -> death interval lower
-float d2 = 0.549; // life -> death interval upper
-float transitionSmoothRadius = 0.028;
-float lifeSmoothRadius = 0.147;
+out vec4 colour;
 
 void main() {
-  if (!u_updateCells) {
-    gl_FragColor = texture2D(u_image, v_texCoord / u_textureSize);
-    return;
-  }
+  vec2 onePixel = vec2(1, 1) / textureDimensions;
 
   // calculate cell life
   float cTotalLife = 0.0;
@@ -33,8 +27,7 @@ void main() {
     for (float y = -cellRadius - 3.0; y <= cellRadius + 3.0; y += 1.0) {
       vec2 pos = vec2(x, y);
       float weight = 1.0 - smoothstep(cellRadius - 2.0, cellRadius + 2.0, length(pos));
-      vec2 texCoord = (v_texCoord + pos) / u_textureSize;
-      float texValue = texture2D(u_image, texCoord).r;
+      float texValue = texture(image, texCoord + onePixel * pos).r;
 
       cTotalLife += texValue * weight;
       cTotalWeight += weight;
@@ -49,8 +42,7 @@ void main() {
     for (float y = -neighbourRadius - 3.0; y <= neighbourRadius + 3.0; y += 1.0) {
       vec2 pos = vec2(x, y);
       float weight = 1.0 - smoothstep(neighbourRadius - 2.0, neighbourRadius + 2.0, length(pos));
-      vec2 texCoord = (v_texCoord + pos) / u_textureSize;
-      float texValue = texture2D(u_image, texCoord).r;
+      float texValue = texture(image, texCoord + onePixel * pos).r;
 
       nTotalLife += texValue * weight;
       nTotalWeight += weight;
@@ -64,24 +56,39 @@ void main() {
 
   float newLife;
   if (cellLife < 0.5 - lifeSmoothRadius) { // cell is dead
-    float f = smoothstep(b1 - transitionSmoothRadius, b1 + transitionSmoothRadius, neighbourLife);
-    float g = 1.0 - smoothstep(b2 - transitionSmoothRadius, b2 + transitionSmoothRadius, neighbourLife);
+    float f = smoothstep(birthLower - transitionSmoothRadius, birthLower + transitionSmoothRadius, neighbourLife);
+    float g = 1.0 - smoothstep(birthUpper - transitionSmoothRadius, birthUpper + transitionSmoothRadius, neighbourLife);
     newLife = f * g;
   } else if (0.5 - lifeSmoothRadius < cellLife && cellLife < 0.5 + lifeSmoothRadius) { // cell is between life and death
     float a = 1.0 - smoothstep(0.5 - lifeSmoothRadius, 0.5 + lifeSmoothRadius, cellLife);
     float b = 1.0 - a;
-    float f = smoothstep(a*b1 + b*d1 - transitionSmoothRadius, a*b1 + b*d1 + transitionSmoothRadius, neighbourLife);
-    float g = 1.0 - smoothstep(a*b2 + b*d2 - transitionSmoothRadius, a*b2 + b*d2 + transitionSmoothRadius, neighbourLife);
+    float f = smoothstep(a*birthLower + b*deathLower - transitionSmoothRadius, a*birthLower + b*deathLower + transitionSmoothRadius, neighbourLife);
+    float g = 1.0 - smoothstep(a*birthUpper + b*deathUpper - transitionSmoothRadius, a*birthUpper + b*deathUpper + transitionSmoothRadius, neighbourLife);
     newLife = f * g;
   } else { // cell is alive
-    float f = smoothstep(d1 - transitionSmoothRadius, d1 + transitionSmoothRadius, neighbourLife);
-    float g = 1.0 - smoothstep(d2 - transitionSmoothRadius, d2 + transitionSmoothRadius, neighbourLife);
+    float f = smoothstep(deathLower - transitionSmoothRadius, deathLower + transitionSmoothRadius, neighbourLife);
+    float g = 1.0 - smoothstep(deathUpper - transitionSmoothRadius, deathUpper + transitionSmoothRadius, neighbourLife);
     newLife = f * g;
   }
 
-  float deltaLife = (newLife - cellLife) * u_deltaTimeSeconds;
-  float currentValue = texture2D(u_image, v_texCoord / u_textureSize).r;
+  float deltaLife = (newLife - cellLife) * deltaTime;
+  float currentValue = texture(image, texCoord).r;
   float newValue = clamp(currentValue + deltaLife, 0.0, 1.0);
-  gl_FragColor = vec4(vec3(newValue), 1.0);
+  colour = vec4(vec3(newValue), 1.0);
+}
+`;
+
+const DISPLAY_FS = `#version 300 es
+precision mediump float;
+
+in vec2 texCoord;
+
+uniform sampler2D image;
+
+out vec4 colour;
+
+void main() {
+  colour = texture(image, texCoord);
 }
 `
+
