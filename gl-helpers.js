@@ -44,7 +44,7 @@ function createTexture(gl, params = null) {
   let texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
 
-  let p = params ? params : [gl.LINEAR, gl.LINEAR, gl.REPEAT, gl.REPEAT];
+  let p = params ? params : [gl.LINEAR, gl.LINEAR, gl.REPEAT, gl.REPEAT]; // default parameters
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, p[0]);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, p[1]);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, p[2]);

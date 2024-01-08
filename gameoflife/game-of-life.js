@@ -46,6 +46,8 @@ function render(image) {
 
   // initialise texture with input image
   function initialise() {
+    canvas.width = gl.canvas.clientWidth;
+    canvas.height = gl.canvas.clientHeight;
     gl.useProgram(displayProgram);
     
     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffers[0]);
@@ -167,6 +169,8 @@ function render(image) {
     framesPerUpdate = Math.floor(60 / parseFloat(fpsInput.value));
     fpsOutput.textContent = fpsInput.value;
   });
+  framesPerUpdate = Math.floor(60 / parseFloat(fpsInput.value));
+  fpsOutput.textContent = fpsInput.value;
 
   document.addEventListener('keypress', (event) => {
     if (event.key == ' ') {
