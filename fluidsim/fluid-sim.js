@@ -1,18 +1,13 @@
 function render(images) {
   // initialise canvas
   const canvas = document.querySelector("#gl-canvas");
-  const gl = canvas.getContext("webgl");
+  const gl = canvas.getContext("webgl2");
   if (!gl) { 
     alert("Unable to initialise WebGL"); 
     return; 
   }
-
-  const textureFloatExtension = gl.getExtension("OES_texture_float");
-  const clearFloatExtension = gl.getExtension("WEBGL_color_buffer_float");
-  if (!textureFloatExtension || !clearFloatExtension) {
-    alert("need extensions");
-    return;
-  }
+  gl.getExtension("OES_texture_float_linear");
+  gl.getExtension("EXT_color_buffer_float");
 
   //
   // global variables
@@ -26,477 +21,535 @@ function render(images) {
   const source = images[1];
   const boundaries = images[2];
 
+  if (initial.width != source.width || initial.width != boundaries.width || source.width != boundaries.width || 
+      initial.height != source.height || initial.height != boundaries.height || source.height != boundaries.height) {
+    console.log("Error: source images do not have same dimensions. Cannot run program.");
+    return;
+  }
+
   // set texture size to input image size
   const textureWidth = source.width;
   const textureHeight = source.height;
-  const wrapTexture = [false, false];
   
   console.log("Simulating " + textureWidth + ", " + textureHeight + " grid, output to " + canvas.width + ", " + canvas.height + " canvas");
-  
-  // constants
-  const VELOCITY_FIELD = false;
-  const DENSITY_FIELD = true;
-  const VELOCITY = false;
-  const CONTINUOUS = true;
   
   //
   // simulation parameters
   //
-  const diffusionRate = Math.pow(10, 0);
-  const viscosity = Math.pow(10, 0);
-  const overRelaxation = 0.00;
-  const deltaTime = 1 / 120;
-  const splatDensity = 120;
-  const splatRadius = 10;
+  const params = {
+    imageConvertScale: 1, 
+    deltaTime: 1.0 / 240.0, 
+    inputMode: 0, 
+    splatDensity: 1, 
+    splatRadius: 10, 
+    diffusionRate: 1, 
+    overRelaxation: 0, 
+    boundaryFriction: 0.05, 
+    displayMode: 0, 
+    showBoundaries: true, 
+  };
 
   const RELAXATION_STEPS = 20;
   
-  // create field
-  const sourceTexture = createAndSetupTexture(gl);
+  const initialImage = createTexture(gl); // converted to field
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, initial);
+  const sourceImage = createTexture(gl); // converted to field
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-  const boundariesTexture = createAndSetupTexture(gl);
+  const boundariesTexture = createTexture(gl);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, boundaries);
-
-  let fieldStep = 0;
-  let pFieldStep = 0;
-
-  //
-  // initialisation time
-  //
-  // initialise field textures
-  const prevFieldTexture = createAndSetupTexture(gl);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, textureWidth, textureHeight, 0, gl.RGBA, gl.FLOAT, null);
-  const prevFieldFramebuffer = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, prevFieldFramebuffer);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, prevFieldTexture, 0);
-
+  
+  // field textures
   const fieldTextures = [];
   const fieldFramebuffers = [];
-  for (let i = 0; i < 2; ++i) {
-    texture = createAndSetupTexture(gl);
-    fieldTextures.push(texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, textureWidth, textureHeight, 0, gl.RGBA, gl.FLOAT, null);
+  for (let i = 0; i < 2; i++) {
+    let texture = createTexture(gl);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, textureWidth, textureHeight, 0, gl.RGBA,  gl.FLOAT, null);
+    fieldTextures.push(texture); 
 
-    let framebuffer = gl.createFramebuffer();
-    fieldFramebuffers.push(framebuffer);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    fieldFramebuffers.push(createFramebuffer(gl, texture));
   }
-  gl.clearColor(0, 0, 0, 1);
+  const currentFieldTexture = createTexture(gl);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, textureWidth, textureHeight, 0, gl.RGBA,  gl.FLOAT, null);
+  const prevFieldTexture = createTexture(gl);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, textureWidth, textureHeight, 0, gl.RGBA,  gl.FLOAT, null);
 
-  // create position buffers
-  const texPositionBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, texPositionBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-    0, 0, textureWidth, 0, textureWidth, textureHeight, 
-    0, 0, textureWidth, textureHeight, 0, textureHeight
-  ]), gl.STATIC_DRAW);
+  // image to field program
+  console.log("creating image to field program...");
+  const imageToFieldProgram = createProgram(gl, TEXTURE_VS, IMAGE_TO_FIELD_FS);
+  const imageToFieldLocations = createLocations(gl, imageToFieldProgram, 
+    ["position"], 
+    ["image", "scale"]
+  );
+  const sourceTexture = createTexture(gl);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, textureWidth, textureHeight, 0, gl.RGBA,  gl.FLOAT, null);
+  const sourceTextureFramebuffer = createFramebuffer(gl, sourceTexture);
 
-  const canvasPositionBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, canvasPositionBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-    0, 0, canvas.width, 0, canvas.width, canvas.height, 
-    0, 0, canvas.width, canvas.height, 0, canvas.height
-  ]), gl.STATIC_DRAW);
-
-  // initialise add source program
+  // add source program
   console.log("creating add source program...");
-  const addSourceProgram = createProgram(gl, BUFFER_VERT, ADD_SOURCE_FRAG);
-  const addSourceDataLocations = {
-    position: gl.getAttribLocation(addSourceProgram, "a_position"),
-    textureResolution: gl.getUniformLocation(addSourceProgram, "u_textureResolution"),
-    source: gl.getUniformLocation(addSourceProgram, "u_source"),
-    field: gl.getUniformLocation(addSourceProgram, "u_field"),
-    inputMode: gl.getUniformLocation(addSourceProgram, "u_inputMode"), 
-    mousePos: gl.getUniformLocation(addSourceProgram, "u_mousePos"), 
-    mouseVel: gl.getUniformLocation(addSourceProgram, "u_mouseVel"), 
-    splatDensity: gl.getUniformLocation(addSourceProgram, "u_splatDensity"), 
-    splatRadius: gl.getUniformLocation(addSourceProgram, "u_splatRadius"),
-    deltaTime: gl.getUniformLocation(addSourceProgram, "u_deltaTime"),
-  };
+  const addSourceProgram = createProgram(gl, TEXTURE_VS, ADD_SOURCE_FS);
+  const addSourceLocations = createLocations(gl, addSourceProgram, 
+    ["position"], 
+    ["fieldTexture", "sourceTexture", "textureDimensions", "deltaTime", "inputMode", "mousePos", "mouseVel", "splatDensity", "splatRadius"]
+  );
   gl.useProgram(addSourceProgram);
-  gl.uniform2f(addSourceDataLocations.textureResolution, textureWidth, textureHeight);
-  gl.uniform1i(addSourceDataLocations.field, 0);
-  gl.uniform1i(addSourceDataLocations.source, 1);
-  gl.uniform1f(addSourceDataLocations.splatDensity, splatDensity);
-  gl.uniform1f(addSourceDataLocations.splatRadius, splatRadius);
-  gl.uniform1f(addSourceDataLocations.deltaTime, deltaTime);
+  gl.uniform1i(addSourceLocations.fieldTexture, 0);
+  gl.uniform1i(addSourceLocations.sourceTexture, 1);
+  gl.uniform2f(addSourceLocations.textureDimensions, textureWidth, textureHeight);
   
-  // initialise diffuse program
-  console.log("creating diffuse program...");
-  const diffuseProgram = createProgram(gl, BUFFER_VERT, DIFFUSE_FRAG);
-  const diffuseDataLocations = {
-    position: gl.getAttribLocation(diffuseProgram, "a_position"), 
-    textureResolution: gl.getUniformLocation(diffuseProgram, "u_textureResolution"), 
-    field: gl.getUniformLocation(diffuseProgram, "u_field"), 
-    field0: gl.getUniformLocation(diffuseProgram, "u_field0"), 
-    deltaTime: gl.getUniformLocation(diffuseProgram, "u_deltaTime"), 
-    fieldType: gl.getUniformLocation(diffuseProgram, "u_fieldType"), 
-    diffusionRate: gl.getUniformLocation(diffuseProgram, "u_diffusionRate"), 
-  };
-  gl.useProgram(diffuseProgram);
-  gl.uniform2f(diffuseDataLocations.textureResolution, textureWidth, textureHeight);
-  gl.uniform1i(diffuseDataLocations.field, 0);
-  gl.uniform1i(diffuseDataLocations.field0, 1);
-  gl.uniform1f(diffuseDataLocations.deltaTime, deltaTime);
-  
-  // initialise set field 0 program
-  console.log("creating copy field program");
-  const copyFieldProgram = createProgram(gl, BUFFER_VERT, COPY_FIELD_FRAG);
-  const copyFieldDataLocations = {
-    position: gl.getAttribLocation(copyFieldProgram, "a_position"), 
-    textureResolution: gl.getUniformLocation(copyFieldProgram, "u_textureResolution"), 
-    field: gl.getUniformLocation(copyFieldProgram, "u_field"), 
-  };
-  gl.useProgram(copyFieldProgram);
-  gl.uniform2f(copyFieldDataLocations.textureResolution, textureWidth, textureHeight);
-  gl.uniform1i(copyFieldDataLocations.field, 0);
-  let field0Texture = createAndSetupTexture(gl);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, textureWidth, textureHeight, 0, gl.RGBA, gl.FLOAT, null);
-  let field0Framebuffer = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, field0Framebuffer);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, field0Texture, 0);
-  
-  // initialise advect program
-  console.log("creating advect program...");
-  const advectProgram = createProgram(gl, BUFFER_VERT, ADVECT_FRAG);
-  const advectDataLocations = {
-    position: gl.getAttribLocation(advectProgram, "a_position"), 
-    textureResolution: gl.getUniformLocation(advectProgram, "u_textureResolution"),
-    field: gl.getUniformLocation(advectProgram, "u_field"), 
-    deltaTime: gl.getUniformLocation(advectProgram, "u_deltaTime"), 
-    fieldType: gl.getUniformLocation(advectProgram, "u_fieldType"), 
-  };
-  gl.useProgram(advectProgram);
-  gl.uniform2f(advectDataLocations.textureResolution, textureWidth, textureHeight);
-  gl.uniform1i(advectDataLocations.field, 0);
-  gl.uniform1f(advectDataLocations.deltaTime, deltaTime);
+  // diffuse velocity program
+  console.log("creating diffuse velocity program...");
+  const diffuseVelocityProgram = createProgram(gl, DIFFUSE_VS, DIFFUSE_VELOCITY_FS);
+  const diffuseVelocityLocations = createLocations(gl, diffuseVelocityProgram, 
+    ["position"], 
+    ["textureDimensions", "field0Texture", "fieldTexture", "diffusionRate", "deltaTime"]
+  );
+  gl.useProgram(diffuseVelocityProgram);
+  gl.uniform2f(diffuseVelocityLocations.textureDimensions, textureWidth, textureHeight);
+  gl.uniform1i(diffuseVelocityLocations.field0Texture, 0);
+  gl.uniform1i(diffuseVelocityLocations.fieldTexture, 1);
 
-  //
-  // initialise programs for project function
-  //
-  // calc div field
+  // diffuse density program
+  console.log("creating diffuse density program...");
+  const diffuseDensityProgram = createProgram(gl, DIFFUSE_VS, DIFFUSE_DENSITY_FS);
+  const diffuseDensityLocations = createLocations(gl, diffuseDensityProgram, 
+    ["position"], 
+    ["textureDimensions", "field0Texture", "fieldTexture", "diffusionRate", "deltaTime"]
+  );
+  gl.useProgram(diffuseDensityProgram);
+  gl.uniform2f(diffuseDensityLocations.textureDimensions, textureWidth, textureHeight);
+  gl.uniform1i(diffuseDensityLocations.field0Texture, 0);
+  gl.uniform1i(diffuseDensityLocations.fieldTexture, 1);
+
+  // advect velocity program
+  console.log("creating advect velocity program...");
+  const advectVelocityProgram = createProgram(gl, TEXTURE_VS, ADVECT_VELOCITY_FS);
+  const advectVelocityLocations = createLocations(gl, advectVelocityProgram, 
+    ["position"], 
+    ["fieldTexture", "textureDimensions", "deltaTime"]
+  );
+  gl.useProgram(advectVelocityProgram);
+  gl.uniform2f(advectVelocityLocations.textureDimensions, textureWidth, textureHeight);
+
+  // advect density program
+  console.log("creating advect density program...");
+  const advectDensityProgram = createProgram(gl, TEXTURE_VS, ADVECT_DENSITY_FS);
+  const advectDensityLocations = createLocations(gl, advectDensityProgram, 
+    ["position"], 
+    ["fieldTexture", "textureDimensions", "deltaTime"]
+  );
+  gl.useProgram(advectDensityProgram);
+  gl.uniform2f(advectDensityLocations.textureDimensions, textureWidth, textureHeight);
+
+  // calc div field program
   console.log("creating calc div field program...");
-  const calcDivFieldProgram = createProgram(gl, BUFFER_VERT, CALC_DIV_FIELD_FRAG);
-  const calcDivFieldDataLocations = {
-    position: gl.getAttribLocation(calcDivFieldProgram, "a_position"), 
-    textureResolution: gl.getUniformLocation(calcDivFieldProgram, "u_textureResolution"), 
-    field: gl.getUniformLocation(calcDivFieldProgram, "u_field"), 
-    h: gl.getUniformLocation(calcDivFieldProgram, "h"), 
-  };
-  gl.useProgram(calcDivFieldProgram);
-  gl.uniform2f(calcDivFieldDataLocations.textureResolution, textureWidth, textureHeight);
-  gl.uniform1i(calcDivFieldDataLocations.field, 0);
-  gl.uniform1f(calcDivFieldDataLocations.h, 1 / Math.sqrt(textureWidth * textureHeight));
-  const divFieldTextures = [];
-  const divFieldFramebuffers = [];
-  for (let i = 0; i < 2; ++i) {
-    let texture = createAndSetupTexture(gl);
-    divFieldTextures.push(texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, textureWidth, textureHeight, 0, gl.RGBA, gl.FLOAT, null);
+  const calcDivFieldProgram = createProgram(gl, DIFFUSE_VS, CALC_DIV_FIELD_FS);
+  const calcDivFieldLocations = createLocations(gl, calcDivFieldProgram, 
+    ["position"], 
+    ["fieldTexture", "textureDimensions", "h"]
+  );
+  gl.useProgram(calcDivFieldProgram)
+  gl.uniform2f(calcDivFieldLocations.textureDimensions, textureWidth, textureHeight);
+  gl.uniform1f(calcDivFieldLocations.h, 1.0 / Math.sqrt(textureWidth + textureHeight));
+  const divFieldTexture = createTexture(gl);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, textureWidth, textureHeight, 0, gl.RED, gl.FLOAT, null);
+  const divFieldFramebuffer = createFramebuffer(gl, divFieldTexture);
 
-    let framebuffer = gl.createFramebuffer();
-    divFieldFramebuffers.push(framebuffer);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-  }
-
-  // calc gradient field
+  // calc gradient field program
   console.log("creating calc gradient field program...");
-  const calcGradientFieldProgram = createProgram(gl, BUFFER_VERT, CALC_GRADIENT_FIELD_FRAG);
-  const calcGradientFieldDataLocations = {
-    position: gl.getAttribLocation(calcGradientFieldProgram, "a_position"), 
-    textureResolution: gl.getUniformLocation(calcGradientFieldProgram, "u_textureResolution"), 
-    gradientField: gl.getUniformLocation(calcGradientFieldProgram, "u_gradientField"), 
-    divField: gl.getUniformLocation(calcGradientFieldProgram, "u_divField"), 
-    overRelaxation: gl.getUniformLocation(calcGradientFieldProgram, "u_overRelaxation"), 
-  };
-  gl.useProgram(calcGradientFieldProgram);
-  gl.uniform2f(calcGradientFieldDataLocations.textureResolution, textureWidth, textureHeight);
-  gl.uniform1i(calcGradientFieldDataLocations.gradientField, 0);
-  gl.uniform1i(calcGradientFieldDataLocations.divField, 1);
-  gl.uniform1f(calcGradientFieldDataLocations.overRelaxation, overRelaxation);
-  const pFieldTextures = [];
-  const pFieldFramebuffers = [];
-  for (let i = 0; i < 2; ++i) {
-    let texture = createAndSetupTexture(gl);
-    pFieldTextures.push(texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, textureWidth, textureHeight, 0, gl.RGBA, gl.FLOAT, null);
+  const calcGradientFieldProgram = createProgram(gl, DIFFUSE_VS, CALC_GRADIENT_FIELD_FS);
+  const calcGradientFieldLocations = createLocations(gl, calcGradientFieldProgram, 
+    ["position"], 
+    ["textureDimensions", "gradientField", "divField", "overRelaxation"]
+  );
+  gl.useProgram(calcGradientFieldProgram)
+  gl.uniform2f(calcGradientFieldLocations.textureDimensions, textureWidth, textureHeight);
+  gl.uniform1i(calcGradientFieldLocations.gradientField, 0);
+  gl.uniform1i(calcGradientFieldLocations.divField, 1);
+  const gradientFieldTextures = [];
+  const gradientFieldFramebuffers = [];
+  for (let i = 0; i < 2; i++) {
+    let texture = createTexture(gl);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, textureWidth, textureHeight, 0, gl.RED, gl.FLOAT, null);
+    gradientFieldTextures.push(texture); 
 
-    let framebuffer = gl.createFramebuffer();
-    pFieldFramebuffers.push(framebuffer);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    gradientFieldFramebuffers.push(createFramebuffer(gl, texture));
   }
-  
-  // calc mass conserving field
+
+  // calc mass conserving field program
   console.log("creating calc mass conserving field program...");
-  const calcMassConservingFieldProgram = createProgram(gl, BUFFER_VERT, CALC_MASS_CONSERVING_FIELD_FRAG);
-  const calcMassConservingFieldDataLocations = {
-    position: gl.getAttribLocation(calcMassConservingFieldProgram, "a_position"), 
-    textureResolution: gl.getUniformLocation(calcMassConservingFieldProgram, "u_textureResolution"), 
-    field: gl.getUniformLocation(calcMassConservingFieldProgram, "u_field"), 
-    gradientField: gl.getUniformLocation(calcMassConservingFieldProgram, "u_gradientField"), 
-    h: gl.getUniformLocation(calcMassConservingFieldProgram, "h"), 
-  };
-  gl.useProgram(calcMassConservingFieldProgram);
-  gl.uniform2f(calcMassConservingFieldDataLocations.textureResolution, textureWidth, textureHeight);
-  gl.uniform1i(calcMassConservingFieldDataLocations.field, 0);
-  gl.uniform1i(calcMassConservingFieldDataLocations.gradientField, 1);
-  gl.uniform1f(calcMassConservingFieldDataLocations.h, 1.0 / Math.sqrt(textureWidth * textureHeight));
+  const calcMassConservingFieldProgram = createProgram(gl, DIFFUSE_VS, CALC_MASS_CONSERVING_FIELD_FS);
+  const calcMassConservingFieldLocations = createLocations(gl, calcMassConservingFieldProgram, 
+    ["position"], 
+    ["textureDimensions", "fieldTexture", "gradientField"]
+  );
+  gl.useProgram(calcMassConservingFieldProgram)
+  gl.uniform2f(calcMassConservingFieldLocations.textureDimensions, textureWidth, textureHeight);
+  gl.uniform1i(calcMassConservingFieldLocations.fieldTexture, 0);
+  gl.uniform1i(calcMassConservingFieldLocations.gradientField, 1);
 
+  // set boundary velocity program
+  console.log("creating set boundary velocity program...");
+  const setBoundaryVelocityProgram = createProgram(gl, TEXTURE_VS, SET_BOUNDARY_VELOCITY_FS);
+  const setBoundaryVelocityLocations = createLocations(gl, setBoundaryVelocityProgram, 
+    ["position"], 
+    ["boundaries", "fieldTexture", "textureDimensions", "boundaryFriction"]
+  );
+  gl.useProgram(setBoundaryVelocityProgram);
+  gl.uniform2f(setBoundaryVelocityLocations.textureDimensions, textureWidth, textureHeight);
+  gl.uniform1i(setBoundaryVelocityLocations.boundaries, 0);
+  gl.uniform1i(setBoundaryVelocityLocations.fieldTexture, 1);
 
-  // initialise set boundaries program
-  console.log("creating set boundaries program...");
-  const setBoundariesProgram = createProgram(gl, BUFFER_VERT, SET_BOUNDARIES_FRAG);
-  const setBoundariesDataLocations = {
-    position: gl.getAttribLocation(setBoundariesProgram, "a_position"), 
-    textureResolution: gl.getUniformLocation(setBoundariesProgram, "u_textureResolution"), 
-    boundaries: gl.getUniformLocation(setBoundariesProgram, "u_boundaries"), 
-    field: gl.getUniformLocation(setBoundariesProgram, "u_field"), 
-    boundaryType: gl.getUniformLocation(setBoundariesProgram, "u_boundaryType"), 
-  };
-  gl.useProgram(setBoundariesProgram);
-  gl.uniform2f(setBoundariesDataLocations.textureResolution, textureWidth, textureHeight);
-  gl.uniform1i(setBoundariesDataLocations.field, 0);
-  gl.uniform1i(setBoundariesDataLocations.boundaries, 1);
+  // set boundary density program
+  console.log("creating set boundary density program...");
+  const setBoundaryDensityProgram = createProgram(gl, DIFFUSE_VS, SET_BOUNDARY_DENSITY_FS);
+  const setBoundaryDensityLocations = createLocations(gl, setBoundaryDensityProgram, 
+    ["position"], 
+    ["boundaries", "fieldTexture", "textureDimensions"]
+  );
+  gl.useProgram(setBoundaryDensityProgram);
+  gl.uniform2f(setBoundaryDensityLocations.textureDimensions, textureWidth, textureHeight);
+  gl.uniform1i(setBoundaryDensityLocations.boundaries, 0);
+  gl.uniform1i(setBoundaryDensityLocations.fieldTexture, 1);
 
-  // initialise display program
+  // copy field program
+  console.log("creating draw texture program...");
+  const drawTextureProgram = createProgram(gl, TEXTURE_VS, DRAW_TEXTURE_FS);
+  const drawTextureLocations = createLocations(gl, drawTextureProgram, ["position"], ["u_texture", "clampField"]);
+
+  // display program
   console.log("creating display program...");
-  const displayProgram = createProgram(gl, CANVAS_VERT, DISPLAY_FRAG);
-  const displayDataLocations = {
-    position: gl.getAttribLocation(displayProgram, "a_position"), 
-    canvasResolution: gl.getUniformLocation(displayProgram, "u_canvasResolution"), 
-    textureResolution: gl.getUniformLocation(displayProgram, "u_textureResolution"), 
-    field: gl.getUniformLocation(displayProgram, "u_field"), 
-    boundaries: gl.getUniformLocation(displayProgram, "u_boundaries"), 
-    prevField: gl.getUniformLocation(displayProgram, "u_prevField"), 
-  };
+  const displayProgram = createProgram(gl, CANVAS_VS, DISPLAY_FS);
+  const displayLocations = createLocations(gl, displayProgram, 
+    ["position"], 
+    ["fieldTexture", "prevField", "boundaries", "displayMode", "showBoundaries"]
+  );
   gl.useProgram(displayProgram);
-  gl.uniform2f(displayDataLocations.canvasResolution, canvas.width, canvas.height);
-  gl.uniform2f(displayDataLocations.textureResolution, textureWidth, textureHeight);
-  gl.uniform1i(displayDataLocations.field, 0);
-  gl.uniform1i(displayDataLocations.boundaries, 1);
-  gl.uniform1i(displayDataLocations.prevField, 2);
+  gl.uniform1i(displayLocations.fieldTexture, 0);
+  gl.uniform1i(displayLocations.prevField, 1);
+  gl.uniform1i(displayLocations.boundaries, 2);
+
+  // buffers
+  const positionBuffer = makeBuffer(gl, new Float32Array([
+    0, 0, 1, 0, 1, 1, 
+    0, 0, 1, 1, 0, 1
+  ]), gl.STATIC_DRAW);
+
+  const imageToFieldVertexArray = makeVertexArray(gl, [[positionBuffer, imageToFieldLocations.position, 2, gl.FLOAT]]);
+  const addSourceVertexArray = makeVertexArray(gl, [[positionBuffer, addSourceLocations.position, 2, gl.FLOAT]]);
+  const diffuseVelocityVertexArray = makeVertexArray(gl, [[positionBuffer, diffuseVelocityLocations.position, 2, gl.FLOAT]]);
+  const diffuseDensityVertexArray = makeVertexArray(gl, [[positionBuffer, diffuseDensityLocations.position, 2, gl.FLOAT]]);
+  const advectVelocityVertexArray = makeVertexArray(gl, [[positionBuffer, advectVelocityLocations.position, 2, gl.FLOAT]]);
+  const advectDensityVertexArray = makeVertexArray(gl, [[positionBuffer, advectDensityLocations.position, 2, gl.FLOAT]]);
+  const calcDivFieldVertexArray = makeVertexArray(gl, [[positionBuffer, calcDivFieldLocations.position, 2, gl.FLOAT]]);
+  const calcGradientFieldVertexArray = makeVertexArray(gl, [[positionBuffer, calcGradientFieldLocations.position, 2, gl.FLOAT]]);
+  const calcMassConservingFieldVertexArray = makeVertexArray(gl, [[positionBuffer, calcMassConservingFieldLocations.position, 2, gl.FLOAT]]);
+  const setBoundaryVelocityVertexArray = makeVertexArray(gl, [[positionBuffer, setBoundaryVelocityLocations.position, 2, gl.FLOAT]]);
+  const setBoundaryDensityVertexArray = makeVertexArray(gl, [[positionBuffer, setBoundaryDensityLocations.position, 2, gl.FLOAT]]);
+  const drawTextureVertexArray = makeVertexArray(gl, [[positionBuffer, drawTextureLocations.position, 2, gl.FLOAT]]);
+  const displayVertexArray = makeVertexArray(gl, [[positionBuffer, displayLocations.position, 2, gl.FLOAT]]);
 
   //
   // functions
   //
-  function addSource(inputMode = 0, mouseX = 0, mouseY = 0, pmouseX = 0, pmouseY = 0) {
-    gl.useProgram(addSourceProgram);
-
-    setPositionAttribute(gl, addSourceDataLocations.position, texPositionBuffer);
+  function imageToField(framebuffer, texture) {
+    gl.useProgram(imageToFieldProgram);
     
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, fieldTextures[fieldStep % 2]);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
-
-    ++fieldStep;
-
-    if (inputMode == 1) {
-      let x = mouseX / canvas.clientWidth * textureWidth;
-      let y = mouseY / canvas.clientHeight * textureHeight;
-      let x0 = pmouseX / canvas.clientWidth * textureWidth;
-      let y0 = pmouseY / canvas.clientHeight * textureHeight;
-      gl.uniform2f(addSourceDataLocations.mousePos, x, y);
-      gl.uniform2f(addSourceDataLocations.mouseVel, (x - x0) / deltaTime, (y - y0) / deltaTime);
-    }
-
-    gl.uniform1i(addSourceDataLocations.inputMode, inputMode);
-
-    gl.clearColor(0, 0, 0, 1);
-    setFramebuffer(fieldFramebuffers[fieldStep % 2], textureWidth, textureHeight);
+    gl.bindVertexArray(imageToFieldVertexArray);
+    bindTextureToLocation(gl, imageToFieldLocations.image, 0, texture);
+    gl.uniform1f(imageToFieldLocations.scale, params.imageConvertScale);
+    
+    setFramebuffer(gl, framebuffer, textureWidth, textureHeight);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
+  imageToField(sourceTextureFramebuffer, sourceImage); // create source texture, use again in initialisation process
 
-  function diffuse(fieldType) {
-    // set field0
-    gl.useProgram(copyFieldProgram);
-    setPositionAttribute(gl, copyFieldDataLocations.position, texPositionBuffer);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, fieldTextures[fieldStep % 2]);
-    setFramebuffer(field0Framebuffer, textureWidth, textureHeight);
+  function addSource() {
+    gl.useProgram(addSourceProgram);
+    
+    gl.bindVertexArray(addSourceVertexArray);
+    bindTextureToLocation(gl, addSourceLocations.fieldTexture, 0, fieldTextures[step % 2]);
+    bindTextureToLocation(gl, addSourceLocations.sourceTexture, 1, sourceTexture);
+    gl.uniform1f(addSourceLocations.deltaTime, params.deltaTime);
+    // gl.uniform1i(addSourceLocations.inputMode, params.inputMode);
+    gl.uniform1i(addSourceLocations.inputMode, 0);
+    gl.uniform1f(addSourceLocations.splatDensity, params.splatDensity);
+    gl.uniform1f(addSourceLocations.splatRadius, params.splatRadius);
+    
+    // let x = mouse.x / canvas.clientWidth * textureWidth;
+    // let y = mouse.y / canvas.clientHeight * textureHeight;
+    // let x0 = mouse.px / canvas.clientWidth * textureWidth;
+    // let y0 = mouse.py / canvas.clientHeight * textureHeight;
+    // gl.uniform2f(addSourceDataLocations.mousePos, x, y);
+    // gl.uniform2f(addSourceDataLocations.mouseVel, (x - x0) / deltaTime, (y - y0) / deltaTime);
+    gl.uniform2f(addSourceLocations.mousePos, 0, 0);
+    gl.uniform2f(addSourceLocations.mouseVel, 0, 0);
+    
+    setFramebuffer(gl, fieldFramebuffers[(step + 1) % 2], textureWidth, textureHeight);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    step++;
+  }
+
+  function diffuseVelocity() {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fieldFramebuffers[step % 2]);
+    gl.bindTexture(gl.TEXTURE_2D, currentFieldTexture);
+    gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 0, 0, textureWidth, textureHeight, 0);
 
     // iterate solve
+    gl.useProgram(diffuseVelocityProgram);
+
+    gl.bindVertexArray(diffuseVelocityVertexArray);
+    bindTextureToLocation(gl, diffuseVelocityLocations.field0Texture, 0, currentFieldTexture);
+    gl.uniform1f(diffuseVelocityLocations.diffusionRate, params.diffusionRate);
+    gl.uniform1f(diffuseVelocityLocations.deltaTime, params.deltaTime);
     for (let i = 0; i < RELAXATION_STEPS; ++i) {
-      // console.log("diffuse iteration");
-
-      gl.useProgram(diffuseProgram);
-
-      setPositionAttribute(gl, diffuseDataLocations.position, texPositionBuffer);
+      gl.useProgram(diffuseVelocityProgram);
+      bindTextureToLocation(gl, diffuseVelocityLocations.fieldTexture, 1, fieldTextures[step % 2]);
       
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, fieldTextures[fieldStep % 2]);
-      gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, field0Texture); // bind x0 to texture unit 1
-  
-      ++fieldStep;
-      
-      setFramebuffer(fieldFramebuffers[fieldStep % 2], textureWidth, textureHeight);
-      gl.uniform1i(diffuseDataLocations.fieldType, fieldType);
-      gl.uniform1f(diffuseDataLocations.diffusionRate, fieldType ? viscosity : diffusionRate);
+      setFramebuffer(gl, fieldFramebuffers[(step + 1) % 2], textureWidth, textureHeight);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      step++;
       
-      setBoundaries(fieldTextures[fieldStep % 2], fieldFramebuffers[(fieldStep + 1) % 2], fieldType); ++fieldStep;
+      setBoundaryVelocity();
     }
   }
 
-  function advect(fieldType) {
-    gl.useProgram(advectProgram);
+  function diffuseDensity() {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fieldFramebuffers[step % 2]);
+    gl.bindTexture(gl.TEXTURE_2D, currentFieldTexture);
+    gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 0, 0, textureWidth, textureHeight, 0);
 
-    setPositionAttribute(gl, advectDataLocations.position, texPositionBuffer);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, fieldTextures[fieldStep % 2]);
+    // iterate solve
+    gl.useProgram(diffuseDensityProgram);
+    
+    gl.bindVertexArray(diffuseDensityVertexArray);
+    bindTextureToLocation(gl, diffuseDensityLocations.field0Texture, 0, currentFieldTexture);
+    gl.uniform1f(diffuseDensityLocations.diffusionRate, params.diffusionRate);
+    gl.uniform1f(diffuseDensityLocations.deltaTime, params.deltaTime);
+    for (let i = 0; i < RELAXATION_STEPS; ++i) {
+      gl.useProgram(diffuseDensityProgram);
+      bindTextureToLocation(gl, diffuseDensityLocations.fieldTexture, 1, fieldTextures[step % 2]);
+      
+      setFramebuffer(gl, fieldFramebuffers[(step + 1) % 2], textureWidth, textureHeight);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    ++fieldStep;
+      step++;
+      
+      setBoundaryDensity();
+    }
+  }
 
-    setFramebuffer(fieldFramebuffers[fieldStep % 2], textureWidth, textureHeight);
-    gl.uniform1i(advectDataLocations.fieldType, fieldType);
+  function advectVelocity() {
+    gl.useProgram(advectVelocityProgram);
+
+    gl.bindVertexArray(advectVelocityVertexArray);
+    bindTextureToLocation(gl, advectVelocityLocations.fieldTexture, 0, fieldTextures[step % 2]);
+    gl.uniform1f(advectVelocityLocations.deltaTime, params.deltaTime);
+
+    setFramebuffer(gl, fieldFramebuffers[(step + 1) % 2], textureWidth, textureHeight);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    setBoundaries(fieldTextures[fieldStep % 2], fieldFramebuffers[(fieldStep + 1) % 2], fieldType); ++fieldStep;
+    step++;
+
+    setBoundaryVelocity();
+  }
+
+  function advectDensity() {
+    gl.useProgram(advectDensityProgram);
+
+    gl.bindVertexArray(advectDensityVertexArray);
+    bindTextureToLocation(gl, advectDensityLocations.fieldTexture, 0, fieldTextures[step % 2]);
+    gl.uniform1f(advectDensityLocations.deltaTime, params.deltaTime);
+
+    setFramebuffer(gl, fieldFramebuffers[(step + 1) % 2], textureWidth, textureHeight);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    step++;
+
+    setBoundaryDensity();
   }
 
   function project() {
-    // calculate divergence field
+    // calc div field
     gl.useProgram(calcDivFieldProgram);
 
-    setPositionAttribute(gl, calcDivFieldDataLocations.position, texPositionBuffer);
+    gl.bindVertexArray(calcDivFieldVertexArray);
+    bindTextureToLocation(gl, calcDivFieldLocations.fieldTexture, 0, fieldTextures[step % 2]);
 
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, fieldTextures[fieldStep % 2]);
-
-    setFramebuffer(divFieldFramebuffers[0], textureWidth, textureHeight);
+    setFramebuffer(gl, divFieldFramebuffer, textureWidth, textureHeight);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    setBoundaries(divFieldTextures[0], divFieldFramebuffers[1], CONTINUOUS);
+    // calc gradient field
+    gl.useProgram(calcGradientFieldProgram);
 
-    // calculate gradient field
-    pFieldStep = 0;
-    setFramebuffer(pFieldFramebuffers[0], textureWidth, textureHeight);
+    gl.bindVertexArray(calcGradientFieldVertexArray);
+    bindTextureToLocation(gl, calcGradientFieldLocations.divField, 1, divFieldTexture);
+    gl.uniform1f(calcGradientFieldLocations.overRelaxation, params.overRelaxation);
 
-    for (let i = 0; i < RELAXATION_STEPS; ++i) {
-      // iterate solver
-      gl.useProgram(calcGradientFieldProgram);
-
-      setPositionAttribute(gl, calcGradientFieldDataLocations.position, texPositionBuffer);
-
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, pFieldTextures[pFieldStep % 2]);
-      gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, divFieldTextures[1]);
-
-      ++pFieldStep;
-
-      setFramebuffer(pFieldFramebuffers[pFieldStep % 2], textureWidth, textureHeight);
+    for (let i = 0; i < RELAXATION_STEPS; i++) {
+      bindTextureToLocation(gl, calcGradientFieldLocations.gradientField, 0, gradientFieldTextures[i % 2]);
+      
+      setFramebuffer(gl, gradientFieldFramebuffers[(i + 1) % 2], textureWidth, textureHeight);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-      setBoundaries(pFieldTextures[pFieldStep % 2], pFieldFramebuffers[(pFieldStep + 1) % 2], CONTINUOUS); ++pFieldStep;
     }
 
-    // calculate mass conserving field
+    // calc mass conserving field
     gl.useProgram(calcMassConservingFieldProgram);
 
-    setPositionAttribute(gl, calcMassConservingFieldDataLocations.position, texPositionBuffer);
+    gl.bindVertexArray(calcMassConservingFieldVertexArray);
+    bindTextureToLocation(gl, calcMassConservingFieldLocations.fieldTexture, 0, fieldTextures[step % 2]);
+    bindTextureToLocation(gl, calcMassConservingFieldLocations.gradientField, 1, gradientFieldTextures[RELAXATION_STEPS % 2]);
 
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, fieldTextures[fieldStep % 2]);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, pFieldTextures[pFieldStep % 2]);
-
-    ++fieldStep;
-    
-    setFramebuffer(fieldFramebuffers[fieldStep % 2], textureWidth, textureHeight);
+    setFramebuffer(gl, fieldFramebuffers[(step + 1) % 2], textureWidth, textureHeight);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    setBoundaries(fieldTextures[fieldStep % 2], fieldFramebuffers[(fieldStep + 1) % 2], VELOCITY); ++fieldStep;
+    step++;
+
+    setBoundaryVelocity();
   }
 
-  function setBoundaries(inputTexture, outputFramebuffer, boundaryType) {
-    gl.useProgram(setBoundariesProgram);
+  function setBoundaryVelocity() {
+    gl.useProgram(setBoundaryVelocityProgram);
 
-    setPositionAttribute(gl, setBoundariesDataLocations.position, texPositionBuffer);
-
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, inputTexture);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, boundariesTexture);
-
-    setFramebuffer(outputFramebuffer, textureWidth, textureHeight);
-    gl.uniform1i(setBoundariesDataLocations.boundaryType, boundaryType);
+    gl.bindVertexArray(setBoundaryVelocityVertexArray);
+    bindTextureToLocation(gl, setBoundaryVelocityLocations.boundaries, 0, boundariesTexture);
+    bindTextureToLocation(gl, setBoundaryVelocityLocations.fieldTexture, 1, fieldTextures[step % 2]);
+    gl.uniform1f(setBoundaryVelocityLocations.boundaryFriction, params.boundaryFriction);
+  
+    setFramebuffer(gl, fieldFramebuffers[(step + 1) % 2], textureWidth, textureHeight);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    step++;
   }
 
-  function display(texture = fieldTextures[fieldStep % 2]) {
-    // draw
+  function setBoundaryDensity(inputTexture, outputFramebuffer, boundaryType) {
+    gl.useProgram(setBoundaryDensityProgram);
+
+    gl.bindVertexArray(setBoundaryDensityVertexArray);
+    bindTextureToLocation(gl, setBoundaryDensityLocations.boundaries, 0, boundariesTexture);
+    bindTextureToLocation(gl, setBoundaryDensityLocations.fieldTexture, 0, fieldTextures[step % 2]);
+
+    setFramebuffer(gl, fieldFramebuffers[(step + 1) % 2], textureWidth, textureHeight);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    step++;
+  }
+
+  function display(print = false) {
     gl.useProgram(displayProgram);
 
-    setPositionAttribute(gl, displayDataLocations.position, canvasPositionBuffer);
+    gl.bindVertexArray(displayVertexArray);
+    bindTextureToLocation(gl, displayLocations.fieldTexture, 0, fieldTextures[step % 2]);
+    bindTextureToLocation(gl, displayLocations.prevField, 0, prevFieldTexture);
+    bindTextureToLocation(gl, displayLocations.boundaries, 0, boundariesTexture);
+    gl.uniform1i(displayLocations.displayMode, params.displayMode);
+    gl.uniform1i(displayLocations.showBoundaries, params.showBoundaries);
 
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, boundariesTexture);
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, prevFieldTexture);
-
-    setFramebuffer(null, canvas.width, canvas.height);
-    
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-    // save texture
-    gl.useProgram(copyFieldProgram);
-    setPositionAttribute(gl, copyFieldDataLocations.position, texPositionBuffer);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, fieldTextures[fieldStep % 2]);
-    setFramebuffer(prevFieldFramebuffer, textureWidth, textureHeight);
+    let width = canvas.width;
+    let height = canvas.height;
+    if (!print) {
+      let clientAspect = canvas.width / canvas.height;
+      let outputAspect = textureWidth / textureHeight;
+      let correctionFactor = clientAspect / outputAspect;
+      if (clientAspect < outputAspect) {
+        height *= correctionFactor;
+      } else {
+        width /= correctionFactor;
+      }
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport((canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
-  function setFramebuffer(fbo, width, height) { 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-    gl.viewport(0, 0, width, height);
+  function drawTexture(texture, clampField) {
+    let width = canvas.width;
+    let height = canvas.height;
+    let clientAspect = canvas.width / canvas.height;
+    let outputAspect = textureWidth / textureHeight;
+    let correctionFactor = clientAspect / outputAspect;
+    if (clientAspect < outputAspect) {
+      height *= correctionFactor;
+    } else {
+      width /= correctionFactor;
+    }
+
+    gl.useProgram(drawTextureProgram);
+
+    gl.bindVertexArray(drawTextureVertexArray);
+    bindTextureToLocation(gl, drawTextureLocations.u_texture, 0, texture);
+    gl.uniform1i(drawTextureLocations.clampField, clampField);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport((canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
-  
-  display();
+
+  let step = 0;
+  function initialise() {
+    step = 0;
+    console.log("initialise()");
+    canvas.width = gl.canvas.clientWidth;
+    canvas.height = gl.canvas.clientHeight;
+    imageToField(fieldFramebuffers[0], initialImage);
+    // display();
+    drawTexture(fieldTextures[step % 2], true);
+  }
+  initialise();
+
+  function update() {
+    console.log("update()");
+    addSource();
+
+    diffuseVelocity();
+    project();
+    advectVelocity();
+    project();
+
+    diffuseDensity();
+    advectDensity();
+  }
   
   // animation
-  let playAnimation = true;
+  let play = false;
+  let manualStep = 0;
 
-  let mouseInput = false;
-  let constantInput = false;
+  function loop() {
+    if (!play) {
+      console.log("paused");
+      return;
+    }
 
-  let mouseX, mouseY, pmouseX, pmouseY;
+    update();
+    drawTexture(fieldTextures[step % 2], true);
 
-  requestAnimationFrame(update);
+    requestAnimationFrame(loop);
+  }
 
   // continuous animation
+
   function playPause() {
-    if (!playAnimation) {
-      console.log("simulation started");
-      playAnimation = true;
-      requestAnimationFrame(update);
-    } else {
-      console.log("simulation paused");
-      playAnimation = false;
+    play = !play;
+    if (play) {
+      requestAnimationFrame(loop);
     }
   }
 
   document.addEventListener('keydown', (event) => {
-    const keyName = event.key;
-
-    if (keyName == ' ') {
-      playPause();
-      return;
+    switch(event.key) {
+      case ' ':
+        play = !play;
+        if (play) {
+          console.log("started");
+          requestAnimationFrame(loop);
+        }
+        break;
+      case 'r':
+        play = false;
+        manualStep = 0;
+        initialise();
     }
-
-    if (keyName == 'Enter') {
-      constantInput = constantInput ? false : true;
-      console.log(constantInput ? "constant source activated" : "constant source deactivated");
-    }
-
   });
 
   document.addEventListener('mousemove', (event) => {
@@ -507,103 +560,53 @@ function render(images) {
     }
   });
 
-  function update() {
-    if (!playAnimation) { return; }
-
-    if (constantInput) {
-      addSource(0);
+  document.addEventListener('click', () => {
+    steps[manualStep]();
+    manualStep++;
+    if (manualStep == steps.length) {
+      manualStep = 0;
     }
-    if (mouseInput) {
-      addSource(1, mouseX, mouseY, pmouseX, pmouseY);
-      pmouseX = mouseX;
-      pmouseY = mouseY;
-      mouseInput = false;
-    }
-
-    // velocity step
-    diffuse(VELOCITY_FIELD);
-    project();
-    advect(VELOCITY_FIELD);
-    project();
-
-    // density step
-    diffuse(DENSITY_FIELD);
-    advect(DENSITY_FIELD);
-
-    // draw to canvas
-    display();
- 
-    requestAnimationFrame(update);
-  }
+  });
+  
 
   const steps = [
     () => { 
-      // add sources and forces
+      console.log("addSource()");
       addSource();
-  
-      // velocity step
-      // diffuse(VELOCITY_FIELD);
-      project();
-      advect(VELOCITY_FIELD);
-      // project();
-  
-      // density step
-      diffuse(DENSITY_FIELD);
-      advect(DENSITY_FIELD);
-  
-      // draw to canvas
-      display();
+      drawTexture(fieldTextures[step % 2], true);
     },
+    () => {
+      console.log("diffuseVelocity()");
+      diffuseVelocity();
+      drawTexture(fieldTextures[step % 2], true);
+    }, 
+    () => {
+      console.log("project()");
+      project();
+      // drawTexture(fieldTextures[step % 2], true);
+      drawTexture(gradientFieldTextures[0], true);
+    }, 
+    () => {
+      console.log("advectVelocity()");
+      advectVelocity();
+      drawTexture(fieldTextures[step % 2], true);
+    }, 
+    () => {
+      console.log("project()");
+      project();
+      drawTexture(fieldTextures[step % 2], true);
+    }, 
+    () => {
+      console.log("diffuseDensity()");
+      diffuseDensity();
+      drawTexture(fieldTextures[step % 2], true);
+    }, 
+    () => {
+      console.log("advectDensity()");
+      advectDensity();
+      drawTexture(fieldTextures[step % 2], true);
+    }
   ];
-  function clickUpdate() {
-    let step = frame % steps.length;
-    steps[step]();
-    ++frame;
-  }
-}
-
-function createShader(gl, type, source) {
-  let shader = gl.createShader(type);
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  let success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
-  if (success) { return shader; }
-
-  console.log(gl.getShaderInfoLog(shader));
-  gl.deleteShader(shader);
-}
-
-function createProgram(gl, vertexShaderSource, fragmentShaderSource) {
-  let vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-  let fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
-  
-  let program = gl.createProgram();
-  gl.attachShader(program, vertexShader);
-  gl.attachShader(program, fragmentShader);
-  gl.linkProgram(program);
-  let success = gl.getProgramParameter(program, gl.LINK_STATUS);
-  if (success) { return program; }
-
-  console.log(gl.getProgramInfoLog(program));
-  gl.deleteProgram(program);
-}
-
-function createAndSetupTexture(gl, wrapTexture = [false, false]) {
-  let texture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrapTexture[0] ? gl.REPEAT : gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrapTexture[1] ? gl.REPEAT : gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-  return texture;
-}
-
-function setPositionAttribute(gl, positionLocation, buffer) {
-  gl.enableVertexAttribArray(positionLocation);
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 }
 
 function loadImage(url, callback) {
@@ -633,9 +636,9 @@ function loadImages(urls, callback) {
 
 function main() {
   loadImages([
-    "../fluidsim/initial.png", 
-    "../fluidsim/source.png",
-    "../fluidsim/boundaries.png",
+    "initial.png", 
+    "source.png",
+    "boundaries.png",
   ], render);
 }
 

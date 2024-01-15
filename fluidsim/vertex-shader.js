@@ -1,50 +1,51 @@
-const BUFFER_VERT = `
+const DIFFUSE_VS = `#version 300 es
 precision highp float;
 
-attribute vec2 a_position;
+in vec2 position; // (0, 0) to (1, 1)
 
-uniform vec2 u_textureResolution;
+uniform vec2 textureDimensions;
 
-varying vec2 v_texCoord;
-varying vec2 v_texCoord_l;
-varying vec2 v_texCoord_r;
-varying vec2 v_texCoord_t;
-varying vec2 v_texCoord_b;
+out vec2 texCoord;
+out vec2 texCoord_l;
+out vec2 texCoord_r;
+out vec2 texCoord_t;
+out vec2 texCoord_b;
 
 void main() {
-  vec2 onePixel = 1.0 / u_textureResolution;
-  vec2 normCoord = a_position * onePixel;
-  vec2 clipSpace = normCoord * 2.0 - 1.0;
-  gl_Position = vec4(clipSpace, 0.0, 1.0);
+  gl_Position = vec4(position * 2.0 - 1.0, 0.0, 1.0);
 
-  v_texCoord = normCoord;
-  v_texCoord_l = (a_position + vec2(-1.0, 0.0)) * onePixel;
-  v_texCoord_r = (a_position + vec2(1.0, 0.0)) * onePixel;
-  v_texCoord_t = (a_position + vec2(0.0, -1.0)) * onePixel;
-  v_texCoord_b = (a_position + vec2(0.0, 1.0)) * onePixel; 
+  vec2 onePixel = 1.0 / textureDimensions;
+  texCoord = position;
+  texCoord_l = position + vec2(-1, 0) * onePixel;
+  texCoord_r = position + vec2(1, 0) * onePixel;
+  texCoord_t = position + vec2(0, -1) * onePixel;
+  texCoord_b = position + vec2(0, 1) * onePixel; 
 }
 `
 
-const CANVAS_VERT = `
+const TEXTURE_VS = `#version 300 es
 precision highp float;
 
-attribute vec2 a_position;
+in vec2 position;
 
-uniform vec2 u_canvasResolution;
-uniform vec2 u_textureResolution;
-
-varying vec2 v_texCoord;
+out vec2 texCoord;
 
 void main() {
-  vec2 normCoord = a_position / u_canvasResolution;
-  vec2 clipSpace = normCoord * 2.0 - 1.0;
-  vec2 offset = 1.0 / (u_textureResolution - 2.0);
+  gl_Position = vec4(position * 2.0 - 1.0, 0.0, 1.0);
+  texCoord = position;
+}
 
-  gl_Position = vec4(clipSpace * vec2(1.0, -1.0), 0.0, 1.0);
+`
 
-  vec2 onePixel = 1.0 / u_textureResolution;
-  vec2 texCoord = normCoord * (u_textureResolution - 2.0) * onePixel;
-  texCoord += onePixel;
-  v_texCoord = texCoord;
+const CANVAS_VS = `#version 300 es
+precision highp float;
+
+in vec2 position;
+
+out vec2 texCoord;
+
+void main() {
+  gl_Position = vec4(position * 2.0 - 1.0, 0.0, 1.0);
+  texCoord = position * vec2(1, -1) + vec2(0, 1);
 }
 `;
