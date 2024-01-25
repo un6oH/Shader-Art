@@ -3,12 +3,10 @@ const VS =
 
 in vec2 position; // canvas coords -1 < x < 1, -1 < y < 1
 
-uniform vec2 centre;
 uniform vec2 range;
 uniform float prec;
 
 out vec2 relativePosition; // relative position from centre
-out vec4 rfcentre;
 
 float p;
 
@@ -24,7 +22,6 @@ void main() {
   
   gl_Position = vec4(position, 0, 1);
 
-  relativePosition = range * position; 
-  rfcentre = vec4(rfComponents(centre.x), rfComponents(centre.y));
+  relativePosition = range * position;
 }
 `;
