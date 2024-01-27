@@ -25,3 +25,16 @@ void main() {
   relativePosition = range * position;
 }
 `;
+
+const TEXTURE_VS = `#version 300 es
+
+in vec2 position; // clipSpace
+
+out vec2 texCoord;
+
+void main() {
+  gl_Position = vec4(position, 0, 1);
+
+  texCoord = (position + 1.0) * 0.5 + vec2(0, 1);
+}
+`

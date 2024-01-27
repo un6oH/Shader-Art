@@ -12,8 +12,34 @@ function main() {
 
   canvas.width = gl.canvas.clientWidth;
   canvas.height = gl.canvas.clientHeight;
-  // canvas.width = 3240;
-  // canvas.height = 2160;
+  
+  const params = {
+    centreX: -0.75, 
+    centreY: 0, 
+    rangeX: 1.25,
+    width: 800, 
+    height: 800,
+    maxIterations: 1000, 
+  };
+
+  const inputs = {};
+
+  let range = [];
+  function setParams() {
+    for (let param in params) {
+      let input = document.getElementById(param);
+      inputs[param] = input;
+      params[param] = parseFloat(input.value);
+    }
+    range[0] = params.rangeX;
+    range[1] = params.rangeX / params.width * params.height;
+  }
+
+  function setInputs() {
+    ["centreX", "centreY", "rangeX"].forEach((param) => {
+      inputs[param].value = params[param];
+    });
+  }
 
   console.log("creating program");
   let program = createProgram(gl, VS, FS);
@@ -23,72 +49,171 @@ function main() {
     -1, 1, 1, -1, -1, -1,
   ];
   let positionBuffer = makeBuffer(gl, new Float32Array(positions), gl.STATIC_DRAW);
-
-  let centre = [-0.6246522899203832,0.39701429960462775];
-  let xRange = 2 ** -22;
-  let yRange = xRange / canvas.width * canvas.height;
-  // let range = new Array(2).fill(2 ** -18);
-  let range = [xRange, yRange];
+  const outputTexture = createTexture(gl);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, params.width, params.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  const outputFramebuffer = createFramebuffer(gl, outputTexture);
 
   let prec = 2 ** -23;
-  let maxIterations = 1000;
-
-  draw();
+  let minRange = 0;
 
   function draw() {
     gl.useProgram(program);
-    gl.viewport(0, 0, canvas.width, canvas.height);
     bindBuffer(gl, positionBuffer, locations.position, 2, gl.FLOAT, false, 0, 0);
 
     let rfCentre = new Float32Array(4);
-    rfCentre[1] = centre[0] % prec;
-    rfCentre[0] = (centre[0] - rfCentre[1]);
-    rfCentre[3] = centre[1] % prec;
-    rfCentre[2] = (centre[1] - rfCentre[3]);
-    console.log("rfCentre: " + rfCentre);
+    rfCentre[1] = params.centreX % prec;
+    rfCentre[0] = (params.centreX - rfCentre[1]);
+    rfCentre[3] = params.centreY % prec;
+    rfCentre[2] = (params.centreY - rfCentre[3]);
 
     gl.uniform4fv(locations.centre, rfCentre);
-    gl.uniform2fv(locations.range, range);
+    gl.uniform2f(locations.range, range[0], range[1]);
     gl.uniform1f(locations.prec, prec);
-    gl.uniform1i(locations.maxIterations, maxIterations);
+    gl.uniform1i(locations.maxIterations, params.maxIterations);
+    
+    drawTexture(gl, outputFramebuffer, params.width, params.height);
+  }
 
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  const displayProgram = createProgram(gl, TEXTURE_VS, TEXTURE_FS);
+  const displayLocations = createLocations(gl, displayProgram, ["position"], ["tex"]);
+  const displayVertexArray = makeVertexArray(gl, [[positionBuffer, displayLocations.position, 2, gl.FLOAT]]);
+  let displayWidth = canvas.width;
+  let displayHeight = canvas.height;
+  function display(print = false) {
+    displayWidth = canvas.width;
+    displayHeight = canvas.height;
+    if (!print) {
+      let clientAspect = canvas.width / canvas.height;
+      let outputAspect = params.width / params.height;
+      let correctionFactor = clientAspect / outputAspect;
+      if (clientAspect < outputAspect) {
+        displayHeight *= correctionFactor;
+      } else {
+        displayWidth /= correctionFactor;
+      }
+    }
+
+    gl.useProgram(displayProgram);
+
+    gl.bindVertexArray(displayVertexArray);
+    bindTextureToLocation(gl, displayLocations.tex, 0, outputTexture);
+    
+    drawTexture(gl, null, (canvas.width - displayWidth) / 2, (canvas.height - displayHeight) / 2, displayWidth, displayHeight);
+  }
+
+  function reset() {
+    canvas.width = gl.canvas.clientWidth;
+    canvas.height = gl.canvas.clientHeight;
+    setParams();
+    gl.bindTexture(gl.TEXTURE_2D, outputTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, params.width, params.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    draw();
+    display();
+  }
+  reset();
+  const downloadAnchor = document.getElementById("download");
+  function screenshot() {
+    canvas.width = params.width;
+    canvas.height = params.height;
+    display(true);
+    let url = canvas.toDataURL();
+    downloadAnchor.href = url;
+    downloadAnchor.download = "mandelbrotset_" + [params.width, params.height].join('x');
+    downloadAnchor.click();
+    canvas.width = gl.canvas.clientWidth;
+    canvas.height = gl.canvas.clientHeight;
+    display();
   }
 
   function planeCoords(mouseCoords) {
-    return [
-      centre[0] + range[0] * (2 * mouseCoords[0] / canvas.width - 1),
-      centre[1] + range[1] * -(2 * mouseCoords[1] / canvas.height - 1)
+    let norm = [
+      (mouseCoords[0] - canvas.width / 2) / (displayWidth * 0.5), 
+      (mouseCoords[1] - canvas.height / 2) / (displayHeight * -0.5)
     ];
+    let plane = [norm[0] * range[0] + params.centreX, norm[1] * range[1] + params.centreY];
+    return plane;
   }
 
-  document.addEventListener('click', (event) => {
-    let mousePos = planeCoords([event.clientX, event.clientY]);
-    centre = mousePos;
-    console.log("centre: " + centre + "\nmousePos: " + mousePos);
-    draw();
+  const mouseXOutput = document.getElementById("mouseX");
+  const mouseYOutput = document.getElementById("mouseY");
+  document.addEventListener('mousemove', (event) => {
+    let coords = planeCoords([event.clientX, event.clientY]);
+    mouseXOutput.textContent = coords[0];
+    mouseYOutput.textContent = coords[1];
   });
 
-  document.addEventListener('keypress', (event) => {
-    if (event.key == 'i') {
-      prec /= 2;
+  let shiftIsPressed = false;
+  document.addEventListener('click', (event) => {
+    if (shiftIsPressed) {
+      [params.centreX, params.centreY] = planeCoords([event.clientX, event.clientY]);
+      setInputs();
       draw();
-    } else if (event.key == 'o') {
-      prec *= 2;
-      draw();
+      display();
     }
-    console.log("precision = 2 ^ " + Math.log2(prec))
+  });
+
+  let pmouseX, pmouseY;
+  document.addEventListener('mousedown', (event) => {
+    if (shiftIsPressed) {
+      let coords = planeCoords([event.clientX, event.clientY]);
+      pmouseX = coords[0];
+      pmouseY = coords[1];
+      setInputs();
+    }
+  });
+
+  document.addEventListener('mouseup', (event) => {
+    if (shiftIsPressed) {
+      let coords = planeCoords([event.clientX, event.clientY]);
+      params.centreX = params.centreX + pmouseX - coords[0]; 
+      params.centreY = params.centreY + pmouseY - coords[1];
+      setInputs();
+      draw();
+      display();
+    }
+  })
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key = 'Shift') {
+      shiftIsPressed = true;
+    }
+  });
+
+  document.addEventListener('keyup', (event) => {
+    if (event.key = 'Shift') {
+      shiftIsPressed = false;
+    }
   });
 
   document.addEventListener('wheel', (event) => {
-    let mousePos = planeCoords([event.clientX, event.clientY]);
-
-    let direction = Math.sign(event.deltaY);
-    range = range.map(v => v * 2**direction);
-
-    centre = [centre[0] + direction * (centre[0] - mousePos[0]) * 0.5, centre[1] + direction * (centre[1] - mousePos[1]) * 0.5];
+    let coords = planeCoords([event.clientX, event.clientY]);
+    let delta = [
+      coords[0] - params.centreX, 
+      coords[1] - params.centreY
+    ];
+    if (event.deltaY > 0) {
+      range = range.map((v) => v * 2);
+      params.centreX -= delta[0];
+      params.centreY -= delta[1];
+    } else {
+      range = range.map((v) => v / 2);
+      params.centreX += delta[0] / 2;
+      params.centreY += delta[1] / 2;
+    }
+    params.rangeX = range[0];
+    setInputs();
     draw();
+    display();
   });
+  
+  inputs.maxIterations.addEventListener('input', (event) => {
+    params.maxIterations = inputs.maxIterations.value;
+    draw();
+    display();
+  });
+
+  document.getElementById("reset").addEventListener('click', reset);
+  document.getElementById("screenshot").addEventListener('click', screenshot);
 }
 
 main();

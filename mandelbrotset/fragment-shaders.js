@@ -18,25 +18,35 @@ vec2 complexMult(vec4 a, vec2 b) {
 }
 
 vec2 rfComponents(float a) { // deconstruction
-  float q = a / p;
-  float g = p * floor(q); // gross component
-  float f = (a - g) / p; // fine component
+  float f = mod(a, p);
+  float g = a - f;
+  // float q = a / p;
+  // float g = p * floor(q); // gross component
+  // float f = (a - g) / p; // fine component
   return vec2(g, f);
 }
 
-vec2 rfSum(vec2 a, vec2 b) { // recursive float add
-  vec2 fSum = rfComponents(p * (a.y + b.y)); // sum of fine components
+vec2 rfSum(vec2 m, vec2 n) { // recursive float add
+  vec2 a, b;
+  if (abs(m.x) > abs(n.x)) {
+    a = m;
+    b = n;
+  } else {
+    a = n;
+    b = m;
+  }
+  vec2 fSum = rfComponents(a.y + b.y); // sum of fine components
   float g = a.x + b.x + fSum.x; // gross component
   return vec2(g, fSum.y);
 }
 
 vec2 rfProduct(vec2 a, vec2 b) { // recursive float mult
   vec2 t1 = rfComponents(a.x * b.x); // 1st term
-  vec2 t2 = rfComponents((a.x * b.y) * p); // 2nd term
-  vec2 t3 = rfComponents((a.y * b.x) * p);
-  vec2 t4 = rfComponents((a.y * b.y) * p * p);
+  vec2 t2 = rfComponents(a.x * b.y); // 2nd term
+  vec2 t3 = rfComponents(a.y * b.x);
+  vec2 t4 = rfComponents(a.y * b.y);
 
-  vec2 fSum = rfComponents(p * (t1.y + t2.y + t3.y + t4.y));
+  vec2 fSum = rfComponents(t1.y + t2.y + t3.y + t4.y);
   float gSum = t1.x + t2.x + t3.x + t4.x;
   return vec2(gSum + fSum.x, fSum.y);
 }
@@ -56,10 +66,6 @@ vec4 rfvComplexProduct(vec4 a, vec4 b) { // z = z_rg + z_rf + (z_ig + z_if)i
   return vec4(real, imaginary);
 }
 
-vec4 scale(float x) {
-  return vec4(vec3(x), 1);
-}
-
 void main() {
   p = prec;
 
@@ -72,7 +78,20 @@ void main() {
     z = rfvAdd(z, C);
     i++;
   }
-  colour = scale(float(i) / float(maxIterations));
+  colour = vec4(vec3(float(i) / float(maxIterations)), 1);
 }
-
 `;
+
+const TEXTURE_FS = `#version 300 es
+precision highp float;
+
+in vec2 texCoord;
+
+uniform sampler2D tex;
+
+out vec4 colour;
+
+void main() {
+  colour = texture(tex, texCoord);
+}
+`

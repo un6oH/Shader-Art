@@ -17,12 +17,22 @@
         position: fixed;
       }
 
-      input {
-        font-size: 2em;
+      #parameter-container {
+        padding: 1ex;
+        color: white;
+        position: fixed;
+        font-family: sans-serif;
+        z-index: 1;
+        text-shadow: 1px 1px 0px gray;
       }
 
-      button {
-        font-size: 2em;
+      p {
+        margin-top: 1ex;
+        margin-bottom: 0.2ex;
+      }
+
+      #download {
+        opacity: 0;
       }
     </style>
     <link rel="icon" type="image/bmp" href="../favicon.bmp" />
@@ -38,6 +48,26 @@
 
   <body>
     <canvas id="gl-canvas"></canvas>
+    <div id="parameter-container">
+      <p>Shift + click / drag to pan</p>
+      <p>Use wheel to zoom</p>
+      <button id="reset">Reset</button>
+      <button id="screenshot">Save Image</button>
+      <p>Centre *:</p>
+      X: <input id="centreX" type="number" value="-0.75">
+      Y: <input id="centreY" type="number" value="0">
+      <p>Range *:</p>
+      <input id="rangeX" type="number" value="1.25" min="0">
+      <p>Mouse position: <output id="mouseX"></output>, <output id="mouseY"></output></p>
+      <p>Width *:</p>
+      <input id="width" type="number" value="800" min="0">
+      <p>Height *:</p>
+      <input id="height" type="number" value="800" min="0">
+      <p>Iteration limit:</p>
+      <input id="maxIterations" type="number" value="1000" min="0" step="100">
+      <p>*: requires reset to apply</p>
+      <a id="download"></a>
+    </div>
   </body>
 
   <script src="mandelbrotset.js"></script>
