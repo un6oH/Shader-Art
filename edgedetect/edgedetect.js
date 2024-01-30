@@ -47,7 +47,6 @@ function main(image) {
   const imageWidth = image.naturalWidth;
 
   const imageTexture = createTexture(gl);
-  gl.bindTexture(gl.TEXTURE_2D, imageTexture);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
 
   const x0Buffer = gl.createBuffer();
@@ -171,12 +170,24 @@ function main(image) {
     gl.drawArrays(gl.LINES, 0, n * 2);
   }
 
-  function display() {
+  function display(print = false) {
+    let width = canvas.width;
+    let height = canvas.height;
+    if (!print) {
+      let clientAspect = canvas.width / canvas.height;
+      let imageAspect = image.naturalWidth / image.naturalHeight;
+      let correctionFactor = clientAspect / imageAspect;
+      if (clientAspect < imageAspect) {
+        height *= correctionFactor;
+      } else {
+        width /= correctionFactor;
+      }
+    }
+
     gl.useProgram(displayProgram);
-    setFramebuffer(gl, null, image.naturalWidth * scale, image.naturalHeight * scale);
     gl.bindVertexArray(displayVertexArray);
     bindTextureToLocation(gl, displayLocations.image, 0, texture);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    drawTexture(gl, null, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
   }
 
   function printBuffer(buffer, size, label) {
@@ -187,8 +198,7 @@ function main(image) {
   }
 
   let threshold = 0.2;
-  let mode = LOCAL;
-  let scale = 1.0;
+  let mode = AGGREGATE;
 
   let complete = false;
   let x0 = new Float32Array(n);
@@ -237,7 +247,6 @@ function main(image) {
 
   document.addEventListener("keydown", (event) => {
     if (event.key == "Shift") {
-      
       thresholdInput.step = 0.01;
     }
   });
@@ -247,6 +256,23 @@ function main(image) {
       thresholdInput.step = 0.05;
     }
   });
+
+  const downloadAnchor = document.getElementById("download");
+  const nameInput = document.getElementById("name");
+  function screenshot() {
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    display(true);
+    let url = canvas.toDataURL();
+    downloadAnchor.href = url;
+    downloadAnchor.download = "edgedetect_" + [image.naturalWidth, image.naturalHeight].join('x') + "_" + threshold + "_" + ["local", "aggregate"][mode] + "_" + nameInput.value + ".png";
+    downloadAnchor.click();
+    canvas.width = gl.canvas.clientWidth;
+    canvas.height = gl.canvas.clientHeight;
+    display();
+  }
+
+  document.getElementById("screenshot").addEventListener('click', screenshot);
 }
 
 function setup() {
