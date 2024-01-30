@@ -17,8 +17,8 @@ function main() {
     centreX: -0.75, 
     centreY: 0, 
     rangeX: 1.25,
-    width: 800, 
-    height: 800,
+    width: 1080, 
+    height: 1080,
     maxIterations: 1000, 
   };
 
@@ -42,7 +42,7 @@ function main() {
   }
 
   console.log("creating program");
-  let program = createProgram(gl, VS, FS);
+  let program = createProgram(gl, VS, RF_ARITHMETIC_FS);
   let locations = createLocations(gl, program, ["position"], ["centre", "range", "prec", "maxIterations"]);
   let positions = [
     -1, 1, 1, 1, 1, -1, 
@@ -61,6 +61,10 @@ function main() {
     bindBuffer(gl, positionBuffer, locations.position, 2, gl.FLOAT, false, 0, 0);
 
     let rfCentre = new Float32Array(4);
+    let maxVal = Math.max(Math.abs(params.centreX), Math.abs(params.centreY));
+    prec = 2 ** (Math.floor(Math.log2(maxVal)) - 23);
+    console.log("precision:", prec);
+
     rfCentre[1] = params.centreX % prec;
     rfCentre[0] = (params.centreX - rfCentre[1]);
     rfCentre[3] = params.centreY % prec;

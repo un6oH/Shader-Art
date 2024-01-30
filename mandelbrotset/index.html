@@ -49,20 +49,20 @@
   <body>
     <canvas id="gl-canvas"></canvas>
     <div id="parameter-container">
-      <p>Shift + click / drag to pan</p>
-      <p>Use wheel to zoom</p>
+      <p>Shift + click to recentre</p>
+      <p>Shift + draw to pan</p>
+      <p>Scroll to zoom</p>
       <button id="reset">Reset</button>
       <button id="screenshot">Save Image</button>
       <p>Centre *:</p>
       X: <input id="centreX" type="number" value="-0.75">
       Y: <input id="centreY" type="number" value="0">
       <p>Range *:</p>
-      <input id="rangeX" type="number" value="1.25" min="0">
+      <input id="rangeX" type="number" value="2" min="0">
       <p>Mouse position: <output id="mouseX"></output>, <output id="mouseY"></output></p>
-      <p>Width *:</p>
-      <input id="width" type="number" value="800" min="0">
-      <p>Height *:</p>
-      <input id="height" type="number" value="800" min="0">
+      <p>Image dimensions *:</p>
+      <input id="width" type="number" value="1920" min="0"> x
+      <input id="height" type="number" value="1080" min="0">
       <p>Iteration limit:</p>
       <input id="maxIterations" type="number" value="1000" min="0" step="100">
       <p>*: requires reset to apply</p>

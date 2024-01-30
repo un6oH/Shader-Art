@@ -1,5 +1,4 @@
-const FS = 
-`#version 300 es
+const RF_ARITHMETIC_FS = `#version 300 es
 
 precision highp float;
 
@@ -26,6 +25,12 @@ vec2 rfComponents(float a) { // deconstruction
   return vec2(g, f);
 }
 
+vec2 renormalise(float a, float b) {
+  float f = mod(a, p) + mod(b, p);
+  float g = a + b - f;
+  return vec2(g, f);
+}
+
 vec2 rfSum(vec2 m, vec2 n) { // recursive float add
   vec2 a, b;
   if (abs(m.x) > abs(n.x)) {
@@ -37,7 +42,14 @@ vec2 rfSum(vec2 m, vec2 n) { // recursive float add
   }
   vec2 fSum = rfComponents(a.y + b.y); // sum of fine components
   float g = a.x + b.x + fSum.x; // gross component
-  return vec2(g, fSum.y);
+  return renormalise(g, fSum.y);
+}
+
+vec2 split(float a) {
+  float t = (exp2(14.0) + 1.0) * a;
+  float a_hi = t - (t - a);
+  float a_lo = a - a_hi;
+  return vec2(a_hi, a_lo);
 }
 
 vec2 rfProduct(vec2 a, vec2 b) { // recursive float mult
@@ -47,8 +59,8 @@ vec2 rfProduct(vec2 a, vec2 b) { // recursive float mult
   vec2 t4 = rfComponents(a.y * b.y);
 
   vec2 fSum = rfComponents(t1.y + t2.y + t3.y + t4.y);
-  float gSum = t1.x + t2.x + t3.x + t4.x;
-  return vec2(gSum + fSum.x, fSum.y);
+  vec2 gSum = rfComponents(t1.x + t2.x + t3.x + t4.x);
+  return renormalise(gSum.x + fSum.x, gSum.y + fSum.y);
 }
 
 vec4 rfvAdd(vec4 a, vec4 b) {
@@ -94,4 +106,4 @@ out vec4 colour;
 void main() {
   colour = texture(tex, texCoord);
 }
-`
+`;
