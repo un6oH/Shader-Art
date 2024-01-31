@@ -25,6 +25,8 @@ function main() {
     boidSize: 10, 
     trailLength: 0, 
   };
+  let aoiTextureWidth = params.width / 8;
+  let aoiTextureHeight = Math.floor(aoiTextureWidth * params.height / params.width);
 
   const resetButton = document.querySelector("#reset");
   const screenshotButton = document.querySelector("#screenshot");
@@ -65,17 +67,12 @@ function main() {
       params[input] = parseFloat(inputs[input].value);
     }
     params.sprite = spriteSelector.value;
-    console.log("setParams() params: ", params);
   }
   setParams();
 
   ["maxAcc", "minSpeed", "maxSpeed", "separationF", "alignmentF", "cohesionF", "aoiRadius", "trailLength"].forEach(input => inputs[input].addEventListener('input', () => {
     params[input] = parseFloat(inputs[input].value);
   }));
-
-  // constants
-  let aoiTextureWidth = params.width / 8;
-  let aoiTextureHeight = Math.floor(aoiTextureWidth * params.height / params.width);
 
   /** initialise programs */
   // update velocity program
@@ -272,7 +269,6 @@ function main() {
     // canvas size
     canvas.width = gl.canvas.clientWidth;
     canvas.height = gl.canvas.clientHeight;
-    console.log("setVariables() drawing to " + params.width + "," + params.height + " output image");
 
     gl.useProgram(updatePositionProgram); gl.uniform2f(updatePositionLocations.canvasDimensions, params.width, params.height);
     gl.useProgram(drawDisplacementAoiProgram); gl.uniform2f(drawDisplacementAoiLocations.canvasDimensions, params.width, params.height);
@@ -310,14 +306,15 @@ function main() {
     boids.spriteVertices = sprite.vertices.map(v => v * boids.size); // vertices for one sprite
     boids.spriteIndices = sprite.indices; // indices for one sprite
     boids.drawColours = new Array(params.n).fill(0).map(sprite.colourFunction).flat().flat();
-    console.log(boids.spriteVertices);
-    console.log(boids.spriteIndices);
-    console.log(boids.drawColours);
+
     gl.bindBuffer(gl.ARRAY_BUFFER, boidColourBuffer); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(boids.drawColours), gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, boidVertexBuffer); gl.bufferData(gl.ARRAY_BUFFER, params.n * boids.spriteVertices.length, gl.STATIC_DRAW);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, boidIndexBuffer); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, params.n * boids.spriteIndices.length, gl.STATIC_DRAW);
 
     // texture setup
+    aoiTextureWidth = params.width / 8;
+    aoiTextureHeight = Math.floor(aoiTextureWidth * params.height / params.width);
+
     gl.bindTexture(gl.TEXTURE_2D, displacementAoiTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, aoiTextureWidth, aoiTextureHeight, 0, gl.RGBA, gl.FLOAT, null);
     gl.bindTexture(gl.TEXTURE_2D, velocityAoiTexture);
@@ -646,9 +643,6 @@ function main() {
   function keyPress(event) {
     if (event.key == ' ') {
       playPause();
-    } else if (event.key == 'x') {
-      console.log("back");
-      screenshotWindow.src = "";
     }
   }
 
@@ -685,10 +679,9 @@ function main() {
     canvas.width = params.width;
     canvas.height = params.height;
     drawTexture(outputTexture, true);
-    console.log(canvas.width, canvas.height);
     let url = canvas.toDataURL();
     downloadAnchor.href = url;
-    downloadAnchor.download = "boids_" + [params.width, params.height].join('x') + "_" + [params.n, params.maxAcc, params.minSpeed, params.maxSpeed, params.separationF, params.alignmentF, params.cohesionF, params.aoiRadius, params.trailLength].join('-');
+    downloadAnchor.download = "boids_" + [params.width, params.height].join('x') + "_" + [params.n, params.maxAcc, params.minSpeed, params.maxSpeed, params.separationF, params.alignmentF, params.cohesionF, params.aoiRadius, params.trailLength].join('-') + ".png";
     downloadAnchor.click();
     canvas.width = gl.canvas.clientWidth;
     canvas.height = gl.canvas.clientHeight;
