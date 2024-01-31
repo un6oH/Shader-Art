@@ -24,6 +24,11 @@
         height: 100vh;
         position: fixed;
       }
+
+      p {
+        margin-top: 0.5ex;
+        margin-bottom: 0;
+      }
     </style>
     <link rel="icon" type="image/bmp" href="../favicon.bmp" />
 
@@ -44,6 +49,8 @@
       <button id="screenshot">Save image</button>
       <p>Frames per second: <output id="fps-output"></output></p>
       <input id="fps" type="range" value="10" min="1" max="60" step="1">
+      <p>Fade out duration</p>
+      <input id="trail" type="number" value = 0 min="0" step="1">
       <a id="download-link"></a>
     </div>
     <canvas id="gl-canvas"></canvas>

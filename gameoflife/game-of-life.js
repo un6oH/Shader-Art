@@ -1,4 +1,4 @@
-function render(image) {
+function main(image) {
   // initialise canvas
   const canvas = document.querySelector("#gl-canvas");
   const gl = canvas.getContext("webgl2");
@@ -15,8 +15,11 @@ function render(image) {
   console.log("Simulating " + gridWidth + ", " + gridHeight + " grid");
 
   // program
-  const updateProgram = createProgram(gl, TEXTURE_VS, UPDATE_FS);
+  const updateProgram = createProgram(gl, UPDATE_VS, UPDATE_FS);
   const updateProgramLocations = createLocations(gl, updateProgram, ["position"], ["invertTexture", "grid", "gridSize"]);
+
+  const renderProgram = createProgram(gl, TEXTURE_VS, RENDER_FS);
+  const renderLocations = createLocations(gl, renderProgram, ["position"], ["invertTexture", "grid", "fade", "fadeStrength"]);
 
   const displayProgram = createProgram(gl, TEXTURE_VS, DRAW_TEXTURE_FS);
   const displayProgramLocations = createLocations(gl, displayProgram, ["position"], ["invertTexture", "image"])
@@ -27,40 +30,25 @@ function render(image) {
     0, 0, 1, 1, 0, 1
   ]), gl.STATIC_DRAW);
   const updateVertexArray = makeVertexArray(gl, [[positionBuffer, updateProgramLocations.position, 2, gl.FLOAT]]);
+  const renderVertexArray = makeVertexArray(gl, [[positionBuffer, renderLocations.position, 2, gl.FLOAT]]);
   const displayVertexArray = makeVertexArray(gl, [[positionBuffer, displayProgramLocations.position, 2, gl.FLOAT]]);
 
+
   // framebuffers and textures
-  const originalImageTexture = createTexture(gl);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image); // put image.png in the texture;
-  
   const textures = [];
   const framebuffers = [];
   for (let i = 0; i < 2; ++i) {
     let texture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gridWidth, gridHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gridWidth, gridHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, image);
     textures.push(texture);
       
     let framebuffer = createFramebuffer(gl, texture);
     framebuffers.push(framebuffer);
   }
 
-  // initialise texture with input image
-  function initialise() {
-    canvas.width = gl.canvas.clientWidth;
-    canvas.height = gl.canvas.clientHeight;
-    gl.useProgram(displayProgram);
-    
-    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffers[0]);
-    gl.viewport(0, 0, gridWidth, gridHeight);
-
-    gl.bindVertexArray(displayVertexArray);
-    gl.bindTexture(gl.TEXTURE_2D, originalImageTexture);
-    gl.uniform1i(displayProgramLocations.invertTexture, 1);
-
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-    step = 0;
-  }
+  const outputTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gridWidth, gridHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  const outputFramebuffer = createFramebuffer(gl, outputTexture);
 
   function update() {
     gl.useProgram(updateProgram);
@@ -77,7 +65,31 @@ function render(image) {
     step ++;
   }
 
-  function display(print) {
+  let fadeStrength = 1;
+  function render() {
+    gl.useProgram(renderProgram);
+    gl.bindVertexArray(renderVertexArray);
+
+    gl.bindTexture(gl.TEXTURE_2D, textures[step % 2]);
+    gl.uniform1f(renderLocations.fadeStrength, fadeStrength);
+    gl.uniform1i(renderLocations.invertTexture, 0);
+    
+    // fade out previous
+    gl.uniform1i(renderLocations.fade, 1);
+    
+    gl.enable(gl.BLEND);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ZERO, gl.ONE);
+    gl.blendEquation(gl.FUNC_REVERSE_SUBTRACT);
+    drawTexture(gl, outputFramebuffer, gridWidth, gridHeight);
+    
+    // draw cells
+    gl.uniform1i(renderLocations.fade, 0);
+    gl.blendEquation(gl.FUNC_ADD);
+    drawTexture(gl, outputFramebuffer, gridWidth, gridHeight);
+    gl.disable(gl.BLEND);
+  }
+
+  function display(print = false) {
     let width = canvas.width;
     let height = canvas.height;
     if (!print) {
@@ -95,9 +107,10 @@ function render(image) {
     
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport((canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
-
+    
     gl.bindVertexArray(displayVertexArray);
-    gl.bindTexture(gl.TEXTURE_2D, textures[step % 2]);
+    gl.bindTexture(gl.TEXTURE_2D, outputTexture);
+    gl.uniform1i(displayProgramLocations.invertTexture, 1);
     
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
@@ -107,7 +120,6 @@ function render(image) {
   let frame = 1;
   let step = 0;
   let play = false;
-  requestAnimationFrame(animate);
   function animate() {
     if (!play) {
       return;
@@ -118,7 +130,8 @@ function render(image) {
       update();
       
       // draw to canvas
-      display(false);
+      render();
+      display();
     }
 
     frame ++;
@@ -126,8 +139,20 @@ function render(image) {
   }
   
   function reset() {
-    initialise();
-    display(false);
+    canvas.width = gl.canvas.clientWidth;
+    canvas.height = gl.canvas.clientHeight;
+
+    for (let i = 0; i < 2; i++) {
+      gl.bindTexture(gl.TEXTURE_2D, textures[i]);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gridWidth, gridHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, outputFramebuffer);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    step = 0;
+    render();
+    display();
     play = false;
   }
   reset();
@@ -153,6 +178,7 @@ function render(image) {
   const playToggle = document.querySelector("#playpause");
   const fpsInput = document.querySelector("#fps");
   const fpsOutput = document.querySelector("#fps-output");
+  const trailInput = document.getElementById("trail");
   const screenshotButton = document.querySelector("#screenshot");
   fpsOutput.textContent = fpsInput.value;
 
@@ -172,6 +198,11 @@ function render(image) {
   framesPerUpdate = Math.floor(60 / parseFloat(fpsInput.value));
   fpsOutput.textContent = fpsInput.value;
 
+  trailInput.addEventListener('input', () => {
+    fadeStrength = 1 / (parseFloat(trailInput.value) + 1);
+  });
+  fadeStrength = 1 / (parseFloat(trailInput.value) + 1);
+
   document.addEventListener('keypress', (event) => {
     if (event.key == ' ') {
       play = !play;
@@ -182,12 +213,12 @@ function render(image) {
   })
 }
 
-function main() {
+function setup() {
   const image = new Image();
   image.src = "image.png";
   image.onload = () => {
-    render(image);
+    main(image);
   }
 }
 
-main();
+setup();
