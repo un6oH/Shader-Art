@@ -125,7 +125,7 @@ function setFramebuffer(gl, framebuffer, width, height) {
   gl.viewport(0, 0, width, height);
 }
 
-function drawTexture(gl, framebuffer = null, x = null, y = null, w = null, h = null) {
+function drawTexture(gl, framebuffer = null, x, y, w = null, h = null) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
   gl.viewport(w ? x : 0, h ? y : 0, w ? w : x, h ? h : y);
   gl.drawArrays(gl.TRIANGLES, 0, 6);
