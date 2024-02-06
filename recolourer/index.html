@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Recolourer</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #202020;
+      }
+      
+      #gl-canvas {
+        width: 100vw;
+        height: 100vh;
+        position: fixed;
+      }
+
+      #controls-container {
+        padding: 1ex;
+        color: white;
+        font-family: sans-serif;
+        z-index: 1;
+        text-shadow: 1px 1px 0px gray;
+        position: fixed;
+      }
+
+      #filename {
+        width: 20em;
+      }
+
+      p {
+        margin-top: 1ex;
+        margin-bottom: 0;
+      }
+
+      button {
+        margin-bottom: 0.5ex;
+      }
+
+      #colour-preview {
+        width: 16em;
+        height: 9em;
+        border: #888 solid;
+      }
+    </style>
+    <link rel="icon" type="image/bmp" href="../favicon.bmp" />
+
+    <!-- libraries -->
+    <script src="../matrix-math.js"></script>
+    <script src="../gl-helpers.js"></script>
+
+    <!-- shaders -->
+    <script src="vertex-shader.js"></script>
+    <script src="fragment-shader.js"></script>
+  </head>
+
+  <body>
+    <div id="controls-container">
+      <a href="../"><button>Return to main menu</button></a>
+      <button id="screenshot">Save image</button><br>
+      <input id="filename" type="text" value="File name (include image type)"><button id="load">Load</button><br>
+      <p>Presets:</p>
+      <select id="preset"></select>
+      <input id="custom-name" type="text" value="Custom1">
+      <button id="save-preset">Save preset</button><br>
+      <p>Colouring mode</p>
+      <select id="mode">
+        <option value="0">Colour map</option>
+        <option value="1">Screenspace gradient</option>
+      </select>
+      <input id="rgb" type="checkbox" value="off">RGB
+      <p>Selected colour:</p>
+      <p>Channel: </p>
+      <select id="channel">
+        <option id="channel1" value="0"></option>
+        <option id="channel2" value="1"></option>
+        <option id="channel3" value="2"></option>
+        <option id="channel4" value="3"></option>
+      </select>
+      <p>1: <output id="output1"></output></p>
+      <input id="input1" type="range" value="0" min="0" max="1" step="0.001">
+      <p>2: <output id="output2"></output></p>
+      <input id="input2" type="range" value="0" min="0" max="1" step="0.001">
+      <p>3: <output id="output3"></output></p>
+      <input id="input3" type="range" value="0" min="0" max="1" step="0.001">
+      <p>4: <output id="output4"></output></p>
+      <input id="input4" type="range" value="0" min="0" max="1" step="0.001">
+      <p>Colour preview</p>
+      <canvas id="colour-preview"></canvas><br>
+      <button id="revert">Revert to preset</button>
+      <button id="apply">Apply</button>
+      <a id="download"></a>
+    </div>
+    <canvas id="gl-canvas"></canvas>
+  </body>
+
+  <script src="recolourer.js"></script>
+</html>
