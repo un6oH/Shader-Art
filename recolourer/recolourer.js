@@ -59,6 +59,7 @@ function main() {
     rgb: false, 
     colours: new Array(4).fill(0).map((v, i) => [0, 0, i / 3, 1]), 
     levels: new Array(4).fill(0).map((v, i) => i / 3), 
+    invert: false, 
   }
 
   function render(print = false) {
@@ -80,10 +81,10 @@ function main() {
     gl.bindVertexArray(renderVertexArray);
     gl.uniform1i(renderLocations.invert, true);
     bindTextureToLocation(gl, renderLocations.image, 0, texture);
-    gl.uniform1i(renderLocations.preview, 0);
+    gl.uniform1i(renderLocations.preview, false);
     gl.uniform1i(renderLocations.mode, params.mode);
     gl.uniform1i(renderLocations.rgb, params.rgb);
-    gl.uniformMatrix4fv(renderLocations.colours, false, params.colours.flat());
+    gl.uniformMatrix4fv(renderLocations.colours, false, params.invert ? params.colours.toReversed().flat() : params.colours.flat());
     gl.uniform4fv(renderLocations.levels, params.levels);
 
     drawTexture(gl, null, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
@@ -108,7 +109,7 @@ function main() {
     previewGL.uniform1i(previewLocations.preview, true);
     previewGL.uniform1i(previewLocations.mode, params.mode);
     previewGL.uniform1i(previewLocations.rgb, params.rgb);
-    previewGL.uniformMatrix4fv(previewLocations.colours, false, params.colours.flat());
+    previewGL.uniformMatrix4fv(previewLocations.colours, false, params.invert ? params.colours.toReversed().flat() : params.colours.flat());
     previewGL.uniform4fv(previewLocations.levels, params.levels);
     drawTexture(previewGL, null, 0, 0, previewCanvas.width, previewCanvas.height);
   
@@ -128,8 +129,7 @@ function main() {
 
     rgbSelector.checked = params.rgb = preset.rgb;
 
-    // params.colours = new Array(4).fill(0).map((v, i) => new Array(...preset.colours[i]));
-    params.colours = Array.of(...preset.colours);
+    params.colours = new Array(4).fill(0).map((v, i) => new Array(...preset.colours[i]));
     params.levels = Array.of(...preset.levels);
     updateSliders();
 
@@ -162,6 +162,7 @@ function main() {
     } else {
       params.rgb = true;
     }
+    updateChannelOptions();
     updatePreview();
   });
 
@@ -216,6 +217,18 @@ function main() {
     });
   }
 
+  const invertButton = document.getElementById("invert");
+  invertButton.checked = false;
+  invertButton.addEventListener('change', () => {
+    if (invertButton.checked) {
+      params.invert = true;
+    } else {
+      params.invert = false;
+    }
+    updatePreview();
+    render();
+  })
+
   // interactivity
   const filenameInput = document.getElementById("filename");
   const loadButton = document.getElementById("load");
@@ -223,9 +236,6 @@ function main() {
     console.log("loading image");
     loadImage(filenameInput.value);
   });
-
-  const applyButton = document.getElementById("apply");
-  applyButton.addEventListener('click', () => render());
 
   const revertButton = document.getElementById("revert");
   revertButton.addEventListener('click', () => {
@@ -314,6 +324,102 @@ const presets = {
       [0.14, 0.9, 1, 1]
     ],
     levels: [0, 1/3, 2/3, 1]
+  }, 
+  plasma: {
+    name: "Plasma", 
+    mode: 0, 
+    rgb: false, 
+    colours: [
+      [2/3, 1, 0.45, 1], 
+      [1, 0.65, 0.85, 1], 
+      [0, 0.65, 0.85, 1], 
+      [1/6, 0.9, 1, 1]
+    ], 
+    levels: [0, 0.55, 0.55, 1]
+  }, 
+  spectral: {
+    name: "Spectral", 
+    mode: 0, 
+    rgb: false, 
+    colours: [
+      [0.75, 0.5, 0.63, 1],
+      [0.25, 0.5, 0.7, 1], 
+      [0.167,0.25, 1, 1], 
+      [0, 1, 0.61, 1], 
+    ], 
+    levels: [0, 0.33, 0.5, 1]
+  }, 
+  bluetoyellow: {
+    name: "Blue to Yellow", 
+    mode: 0, 
+    rgb: false, 
+    colours: [
+      [0.625, 0.9, 0.34, 1],
+      [0.556, 0.83, 0.72, 1], 
+      [0.42, 0.3, 0.83, 1], 
+      [0.167, 0.14, 1, 1], 
+    ], 
+    levels: [0, 0.333, 0.667, 1]
+  }, 
+  greentopurple: {
+    name: "Purple to Green", 
+    mode: 0, 
+    rgb: false, 
+    colours: [
+      [0.4, 1, 0.25, 1],
+      [0.4, 0, 1, 1], 
+      [0.8, 0, 1, 1], 
+      [0.8, 1, 0.3, 1], 
+    ], 
+    levels: [0, 0.5, 0.5, 1]
+  }, 
+  bluetored: {
+    name: "Blue to Red", 
+    mode: 0, 
+    rgb: false, 
+    colours: [
+      [0.59, 1, 0.4, 1],
+      [0.59, 0, 1, 1], 
+      [0.95, 0, 1, 1], 
+      [0.95, 1, 0.4, 1], 
+    ], 
+    levels: [0, 0.5, 0.5, 1]
+  }, 
+  hot: {
+    name: "Hot", 
+    mode: 0, 
+    rgb: false, 
+    colours: [
+      [0, 1, 0, 1],
+      [0.083, 1, 1, 1], 
+      [0.167, 0.48, 1, 1], 
+      [0.167, 0, 1, 1], 
+    ], 
+    levels: [0, 0.504, 0.756, 1]
+  }, 
+  hsv: {
+    name: "HSV", 
+    mode: 0, 
+    rgb: false, 
+    colours: [
+      [0, 1, 1, 1],
+      [1, 1, 1, 1], 
+      [1, 1, 1, 1], 
+      [1, 1, 1, 1], 
+    ], 
+    levels: [0, 1, 1, 1]
+  }, 
+  redgreencoords: {
+    name: "Red Green Coords", 
+    mode: 1, 
+    rgb: true, 
+    colours: [
+      [0, 0, 0.5, 1],
+      [1, 0, 0.5, 1], 
+      [1, 1, 0.5, 1], 
+      [0, 1, 0.5, 1], 
+    ], 
+    levels: [0, 0, 0, 0]
   }, 
 }
 
