@@ -62,6 +62,9 @@ function main() {
 
     let rfCentre = new Float32Array(4);
     let maxVal = Math.max(Math.abs(params.centreX), Math.abs(params.centreY));
+    if (maxVal == 0) {
+      maxVal = 1;
+    }
     prec = 2 ** (Math.floor(Math.log2(maxVal)) - 23);
     console.log("precision:", prec);
 
