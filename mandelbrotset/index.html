@@ -51,7 +51,7 @@
     <div id="parameter-container">
       <a href="../"><button>Return to main menu</button></a>
       <p>Shift + click to recentre</p>
-      <p>Shift + draw to pan</p>
+      <p>Shift + drag to pan</p>
       <p>Scroll to zoom</p>
       <button id="reset">Reset</button>
       <button id="screenshot">Save Image</button>
@@ -67,6 +67,7 @@
       <p>Iteration limit:</p>
       <input id="maxIterations" type="number" value="1000" min="0" step="100">
       <p>*: requires reset to apply</p>
+      <p style="width: 20em">Generation breaks down at ranges less than ~10^-4 due to precision limitations</p>
       <a id="download"></a>
     </div>
   </body>
