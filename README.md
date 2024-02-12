@@ -26,7 +26,7 @@ All programs allow you to download the full res image that you create.
 
 The classic. Requires a black and white image named image.png in the folder.
 
-[Game of life example](/thumbnails/gameoflife.gif)
+![Game of life example](/thumbnails/gameoflife.gif)
 
 ### Continuous life
 
@@ -34,13 +34,13 @@ Cellular automata based on continuous values. Requires a greyscale image named i
 
 *A dedicated GPU is recommended for high-res images.
 
-[Continuous life example](/thumbnails/continuouslife.gif)
+![Continuous life example](/thumbnails/continuouslife.gif)
 
 ### Boids
 
 Flocking/herding simulation with a time complexity of O(n) thanks to textures. Fully interactive!
 
-[Boids example](/thumbnails/boids.gif)
+![Boids example](/thumbnails/boids.gif)
 
 ### Mandelbrot set
 
@@ -48,11 +48,18 @@ Controlled entirely by mouse and keyboard.
 
 Much higher zooms are possible than a basic Mandelbrot generator through the use of recursive floating point numbers. 
 
-[Mandelbrot example](/thumbnails/mandelbrot.gif)
+![Mandelbrot example](/thumbnails/mandelbrot.gif)
 
 ### Recolourer
 
 Can recolour greyscale images with a variety of preset colour maps and gradients. Allows you to change the parameters and test your own settings.
 
-[Recolourer example](/thumbnails/recolourer.gif)
+![Recolourer example](/thumbnails/recolourer.gif)
 
+### WIP
+
+Fluid simulation: I have a prototype, but with lots of bugs and janky interactivity.
+
+Gravity simulation: an n-body simulation with time complexity O(n) is possible using similar techniques to boid simulation.
+
+Stream table: The 'final boss' of this project. I want to make a program that simulates river flow, erosion, and sedimentation, making visuals like this [video](https://www.youtube.com/watch?v=anv_xAzm1kU&pp=ygUMc3RyZWFtIHRhYmxl).
