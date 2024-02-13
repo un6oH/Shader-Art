@@ -644,11 +644,6 @@ function main() {
   function keyPress(event) {
     if (event.key == ' ') {
       playPause();
-    } else if (event.key == "Enter") {
-      for (let i = 0; i < 6; i++) {
-        step(1/60);
-      }
-      screenshot();
     }
   }
 
@@ -674,11 +669,6 @@ function main() {
       drawTexture(displacementAoiTexture);
     },
   ];
-
-  function manualStep() {
-    steps[i % steps.length]();
-    ++i;
-  }
 
   const downloadAnchor = document.querySelector("#download");
   function screenshot() {

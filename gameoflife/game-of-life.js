@@ -154,8 +154,8 @@ function main(image) {
     render();
     display();
     play = false;
+    playToggle.textContent = play ? "Stop" : "Start";
   }
-  reset();
 
   //
   // interactivity
@@ -182,9 +182,10 @@ function main(image) {
   const screenshotButton = document.querySelector("#screenshot");
   fpsOutput.textContent = fpsInput.value;
 
-  resetButton.addEventListener('click', reset);
+  resetButton.addEventListener('click', () => reset);
   playToggle.addEventListener('click', () => {
     play = !play;
+    playToggle.textContent = play ? "Stop" : "Start";
     if (play) {
       animate();
     }
@@ -202,6 +203,8 @@ function main(image) {
     fadeStrength = 1 / (parseFloat(trailInput.value) + 1);
   });
   fadeStrength = 1 / (parseFloat(trailInput.value) + 1);
+
+  reset();
 
   document.addEventListener('keypress', (event) => {
     if (event.key == ' ') {
