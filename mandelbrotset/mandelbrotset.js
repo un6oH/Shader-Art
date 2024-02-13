@@ -66,7 +66,6 @@ function main() {
       maxVal = 1;
     }
     prec = 2 ** (Math.floor(Math.log2(maxVal)) - 23);
-    console.log("precision:", prec);
 
     rfCentre[1] = params.centreX % prec;
     rfCentre[0] = (params.centreX - rfCentre[1]);
@@ -202,7 +201,7 @@ function main() {
       range = range.map((v) => v * 2);
       params.centreX -= delta[0];
       params.centreY -= delta[1];
-    } else {
+    } else if (Math.max(...range) > 0.00006103515625){
       range = range.map((v) => v / 2);
       params.centreX += delta[0] / 2;
       params.centreY += delta[1] / 2;

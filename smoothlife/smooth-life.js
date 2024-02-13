@@ -79,6 +79,9 @@ function render(image) {
 
   // initialise texture with input image
   function initialise() {
+    canvas.width = gl.canvas.clientWidth;
+    canvas.height = gl.canvas.clientHeight;
+
     gl.bindTexture(gl.TEXTURE_2D, textures[0]);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
     step = 0;
@@ -160,10 +163,12 @@ function render(image) {
     initialise();
     display();
     play = false;
+    playButton.textContent = "Start";
   });
   const playButton = document.getElementById("playpause");
   playButton.addEventListener('click', () => {
     play = !play;
+    playButton.textContent = play ? "Stop" : "Start";
     if (play) {
       requestAnimationFrame(animate);
     }

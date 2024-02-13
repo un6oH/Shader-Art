@@ -144,8 +144,11 @@ function main() {
     option.value = preset;
     option.textContent = presets[preset].name;
     presetSelector.appendChild(option);
-    option.addEventListener('click', () => applyPreset(preset));
   }
+
+  presetSelector.addEventListener('change', () => {
+    applyPreset(presetSelector.value);
+  });
 
   // colouring mode
   const modeSelector = document.getElementById("mode");
@@ -255,7 +258,6 @@ function main() {
     if (!presets.hasOwnProperty(key)) { // checks if preset with the same name exists
       let option = new Option(preset.name, key)
       presetSelector.appendChild(option);
-      option.addEventListener('click', () => applyPreset(key));
     }
     presets[key] = preset; // updates or adds new preset
   }

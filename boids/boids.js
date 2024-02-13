@@ -626,6 +626,7 @@ function main() {
 
   const fpsIndicator = document.querySelector("#fps");
   let then = 0
+  let gifFrame = 0;
   function loop(time) {
     if (!play) {
       console.log("<< STOPPED LOOP >>")
@@ -643,6 +644,11 @@ function main() {
   function keyPress(event) {
     if (event.key == ' ') {
       playPause();
+    } else if (event.key == "Enter") {
+      for (let i = 0; i < 6; i++) {
+        step(1/60);
+      }
+      screenshot();
     }
   }
 
@@ -681,11 +687,12 @@ function main() {
     drawTexture(outputTexture, true);
     let url = canvas.toDataURL();
     downloadAnchor.href = url;
-    downloadAnchor.download = "boids_" + [params.width, params.height].join('x') + "_" + [params.n, params.maxAcc, params.minSpeed, params.maxSpeed, params.separationF, params.alignmentF, params.cohesionF, params.aoiRadius, params.trailLength].join('-') + ".png";
+    downloadAnchor.download = "boids" + gifFrame + ".png";
     downloadAnchor.click();
     canvas.width = gl.canvas.clientWidth;
     canvas.height = gl.canvas.clientHeight;
     drawTexture(outputTexture);
+    gifFrame++;
   }
 }
 

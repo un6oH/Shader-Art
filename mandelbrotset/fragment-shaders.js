@@ -42,7 +42,8 @@ vec2 rfSum(vec2 m, vec2 n) { // recursive float add
   }
   vec2 fSum = rfComponents(a.y + b.y); // sum of fine components
   float g = a.x + b.x + fSum.x; // gross component
-  return renormalise(g, fSum.y);
+  // return renormalise(g, fSum.y);
+  return vec2(g + fSum.x, fSum.y);
 }
 
 vec2 split(float a) {
@@ -60,7 +61,8 @@ vec2 rfProduct(vec2 a, vec2 b) { // recursive float mult
 
   vec2 fSum = rfComponents(t1.y + t2.y + t3.y + t4.y);
   vec2 gSum = rfComponents(t1.x + t2.x + t3.x + t4.x);
-  return renormalise(gSum.x + fSum.x, gSum.y + fSum.y);
+  return vec2(gSum.x + fSum.x, gSum.y + fSum.y);
+  // return vec2(gSum.x + fSum.x, gSum.y + fSum.y);
 }
 
 vec4 rfvAdd(vec4 a, vec4 b) {
@@ -78,6 +80,12 @@ vec4 rfvComplexProduct(vec4 a, vec4 b) { // z = z_rg + z_rf + (z_ig + z_if)i
   return vec4(real, imaginary);
 }
 
+vec2 complexProduct(vec2 a, vec2 b) {
+  float real = a.x * b.x - a.y * b.y;
+  float imaginary = a.x * b.y + a.y * b.x;
+  return vec2(real, imaginary);
+}
+
 void main() {
   p = prec;
 
@@ -90,6 +98,15 @@ void main() {
     z = rfvAdd(z, C);
     i++;
   }
+
+  // vec2 C = centre.xz + relativePosition;
+  // vec2 z = C;
+  // int i = 0;
+  // while (length(z) < 2.0 && i < maxIterations) {
+  //   z = complexProduct(z, z);
+  //   z = z + C;
+  //   i++;
+  // }
   colour = vec4(vec3(float(i) / float(maxIterations)), 1);
 }
 `;
