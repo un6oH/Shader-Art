@@ -20,6 +20,8 @@ The webpages are written in HTML, JS, and GLSL, and run locally.
 
 The programs are a mix of interactive and hacky. Some parameters are available in the web page, while some require you to run the webpage from your computer and change the image files to create your own pictures.
 
+Boids and Mandelbrot set can be run from the demo version, on the GitHub page: [Demos](https://un6oh.github.io/Shader-Art/)
+
 All programs allow you to download the full res image that you create.
 
 A collection of images made with the programs can be found here: [Google Drive](https://drive.google.com/drive/folders/1EiPTVD6AeEmbAaDjvuhKkBIpqo01PhJl?usp=sharing). Some images were edited/composited in paint.net.
