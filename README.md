@@ -4,9 +4,9 @@ Various visualisations, simulations, and image manipulation using WebGL2.
 
 ## Introduction
 
-I started this project to make images that look cool. I had seen videos about GPU acceleration (mostly from @SebastianLague on YouTube), and I wanted to try writing graphics programs myself. GPU acceleration allows you to do parallel calculations several times faster than on the CPU, making it ideal for image processing and simulation.
+I started this project to make images that look cool. I had seen videos about GPU acceleration (mostly from [@SebastianLague](https://www.youtube.com/@SebastianLague) on YouTube), and I wanted to try writing graphics programs myself. GPU acceleration allows you to do parallel calculations several times faster than on the CPU, making it ideal for image processing and simulation.
 
-The programs were made with the goal of generating images to use as wallpapers.
+The programs were made with the purpose of generating images to use as wallpapers.
 
 ## Methods
 
