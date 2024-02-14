@@ -58,7 +58,7 @@ Can recolour greyscale images with a variety of preset colour maps and gradients
 
 ![Recolourer example](/thumbnails/recolourer.gif)
 
-### WIP
+### WIP/Planned projects
 
 Fluid simulation: I have a prototype, but with lots of bugs and janky interactivity.
 
