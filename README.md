@@ -22,6 +22,8 @@ The programs are a mix of interactive and hacky. Some parameters are available i
 
 All programs allow you to download the full res image that you create.
 
+A collection of images made with the programs can be found here: [Google Drive](https://drive.google.com/drive/folders/1EiPTVD6AeEmbAaDjvuhKkBIpqo01PhJl?usp=sharing). Some images were edited/composited in paint.net.
+
 ### Conway's Game of Life
 
 The classic. Requires a black and white image named image.png in the folder.
