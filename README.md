@@ -12,7 +12,7 @@ The programs were made with the goal of generating images to use as wallpapers.
 
 The project is web-based because it's what I'm familiar with, and because I don't need to wait around for an app to build.
 
-The programs are scripted through the WebGL2 rendering context and written in GLSL. I learned WebGL through the tutorials on [WebGL2Fundamentals](https://webgl2fundamentals.org/), and used [MDN](https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext/) and [docs.gl](https://docs.gl/) as references. 
+The programs are scripted through the WebGL2 rendering context and written in GLSL. I learned WebGL through the tutorials on [WebGL2Fundamentals](https://webgl2fundamentals.org/), and used [MDN](https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext/) and [docs.gl](https://docs.gl/) as references. The apps use a custom WebGL helper library.
 
 The webpages are written in HTML, JS, and GLSL, and run locally. 
 
