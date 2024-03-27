@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Gravity</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #202020;
+      }
+      canvas {
+        width: 100vw;
+        height: 100vh;
+        position: fixed;
+      }
+
+      #parameter-container {
+        padding: 1ex;
+        color: white;
+        position: fixed;
+        font-family: sans-serif;
+        z-index: 1;
+        text-shadow: 1px 1px 0px gray;
+      }
+
+      p {
+        margin-top: 1ex;
+        margin-bottom: 0.2ex;
+      }
+
+      #download {
+        opacity: 0;
+      }
+
+    </style>
+    <!-- <link rel="icon" type="image/png" href="boids_icon.png" /> -->
+
+    <!-- libraries -->
+    <script src="../gl-helpers.js"></script>
+
+    <!-- shaders -->
+    <script src="vertex-shader.js"></script>
+    <script src="fragment-shader.js"></script>
+  </head>
+
+  <body>
+    <div id="parameter-container">
+    </div>
+    <canvas id="gl-canvas"></canvas>
+  </body>
+
+  <script src="gravity.js"></script>
+<!-- </html> -->
