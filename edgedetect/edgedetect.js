@@ -232,18 +232,13 @@ function main(image) {
   thresholdInput.value = threshold;
   thresholdInput.oninput = () => {
     threshold = parseFloat(thresholdInput.value);
+    full();
   };
 
   const modeToggle = document.getElementById("mode");
   modeToggle.onclick = () => {
     mode = mode == LOCAL ? AGGREGATE : LOCAL;
     modeToggle.textContent = "Mode: " + (mode == LOCAL ? "local" : "aggregate");
-    full();
-  };
-
-  const renderButton = document.getElementById("render");
-  renderButton.onclick = () => {
-    console.log("renderButton.onclick()");
     full();
   };
 
