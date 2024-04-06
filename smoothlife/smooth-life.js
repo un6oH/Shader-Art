@@ -21,23 +21,22 @@ function render(image) {
   const textureWidth = image.width;
   const textureHeight = image.height;
 
-  const inputs = {};
   for (let parameter in params) {
-    let input = document.getElementById(parameter)
-    input.addEventListener('input', () => {
-      params[parameter] = parseFloat(input.value);
-    });
-    inputs[parameter] = input;
-  }
-  for (let parameter of ["deltaTime", "birthLower", "birthUpper", "deathLower", "deathUpper", "transitionSmoothRadius", "lifeSmoothRadius"]) {
-    let output = document.getElementById(parameter + "Output");
-    let input = inputs[parameter];
-    output.textContent = input.value;
-    input.addEventListener('input', () => {
+    let input = document.getElementById(parameter);
+    params[parameter] = parseFloat(input.value);
+    if (["deltaTime", "birthLower", "birthUpper", "deathLower", "deathUpper", "transitionSmoothRadius", "lifeSmoothRadius"].includes(parameter)) {
+      let output = document.getElementById(parameter + "Output");
       output.textContent = input.value;
-    });
+      input.oninput = () => {
+        params[parameter] = parseFloat(input.value);
+        output.textContent = input.value;
+      };
+    } else {
+      input.oninput = () => {
+        params[parameter] = parseFloat(input.value);
+      };
+    }
   }
-  
 
   // set canvas size to client canvas size
   canvas.width = gl.canvas.clientWidth;
@@ -52,7 +51,6 @@ function render(image) {
   
   const displayProgram = createProgram(gl, TEXTURE_VS, DISPLAY_FS);
   const displayProgramLocations = createLocations(gl, displayProgram, ["position"], ["flipTexture", "image"]);
-
 
   // buffers
   const positionBuffer = gl.createBuffer(gl.ARRAY_BUFFER);
@@ -69,7 +67,7 @@ function render(image) {
   const textures = [];
   const framebuffers = [];
   for (let i = 0; i < 2; ++i) {
-    let texture = createTexture(gl);
+    let texture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.REPEAT, gl.REPEAT]);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, textureWidth, textureHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
     textures.push(texture);
       
@@ -159,28 +157,44 @@ function render(image) {
   }
 
   const resetButton = document.getElementById("reset");
-  resetButton.addEventListener('click', () => {
+  resetButton.onclick = () => {
     initialise();
     display();
     play = false;
     playButton.textContent = "Start";
-  });
+  };
   const playButton = document.getElementById("playpause");
-  playButton.addEventListener('click', () => {
+  playButton.onclick = () => {
     play = !play;
     playButton.textContent = play ? "Stop" : "Start";
     if (play) {
       requestAnimationFrame(animate);
     }
-  });
+  };
   const screenshotButton = document.getElementById("screenshot");
-  screenshotButton.addEventListener('click', screenshot);
+  screenshotButton.onclick = screenshot;
 }
 
-function main() {
-  let image = new Image();
-  image.src = "image.png";
-  image.onload = () => render(image);
+const image = new Image();
+image.onload = () => {
+  console.log("creating program with image", image.src);
+  render(image);
+}
+let file = document.getElementById("image-upload").files[0];
+const reader = new FileReader();
+reader.onload = () => {
+  image.src = reader.result;
 }
 
-main();
+function loadImage() {
+  file = document.getElementById("image-upload").files[0];
+  if (file) {
+    reader.readAsDataURL(file);
+  }
+}
+
+if (file) {
+  loadImage();
+} else {
+  image.src = "image.png"
+}
