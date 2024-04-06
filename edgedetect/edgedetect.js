@@ -1,14 +1,13 @@
-function main(image) {
-  const canvas = document.querySelector("#gl-canvas");
-  const gl = canvas.getContext("webgl2");
-  if (!gl) { 
-    alert("Unable to initialise WebGL"); 
-    return; 
-  }
-  gl.getExtension('EXT_color_buffer_float');
-  gl.getExtension('EXT_float_blend');
-  gl.getExtension('OES_texture_float_linear');
+const canvas = document.querySelector("#gl-canvas");
+const gl = canvas.getContext("webgl2");
+if (!gl) { 
+  alert("Unable to initialise WebGL"); 
+}
+gl.getExtension('EXT_color_buffer_float');
+gl.getExtension('EXT_float_blend');
+gl.getExtension('OES_texture_float_linear');
 
+function main(image) {
   canvas.width = gl.canvas.clientWidth;
   canvas.height = gl.canvas.clientHeight;
   console.log("image dimensions", image.naturalWidth, "x", image.naturalHeight);
@@ -129,23 +128,23 @@ function main(image) {
 
   const LOCAL = 0;
   const AGGREGATE = 1;
-  function step(i) {
-    console.log("step");
+  function step(step, threshold) {
+    console.log("step()");
     gl.enable(gl.RASTERIZER_DISCARD);
     
     // set edges
     gl.useProgram(setEdgesProgram);
-    gl.bindVertexArray(setEdgesVertexArrays[i % 2]);
+    gl.bindVertexArray(setEdgesVertexArrays[step % 2]);
     bindTextureToLocation(gl, setEdgesLocations.image, 0, imageTexture);
     gl.uniform1f(setEdgesLocations.textureWidth, imageWidth);
     gl.uniform1f(setEdgesLocations.threshold, threshold);
     gl.uniform1i(setEdgesLocations.mode, mode);
-    drawWithTransformFeedback(gl, setEdgesTransformFeedbacks[i % 2], gl.POINTS, () => { gl.drawArrays(gl.POINTS, 0, n); });
+    drawWithTransformFeedback(gl, setEdgesTransformFeedbacks[step % 2], gl.POINTS, () => { gl.drawArrays(gl.POINTS, 0, n); });
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
     // set colours;
     gl.useProgram(setColourProgram);
-    gl.bindVertexArray(setColourVertexArrays[i % 2]);
+    gl.bindVertexArray(setColourVertexArrays[step % 2]);
     gl.uniform1f(setColourLocations.textureWidth, imageWidth);
     bindTextureToLocation(gl, setColourLocations.image, 0, imageTexture);
     drawWithTransformFeedback(gl, setColourTransformFeedback, gl.POINTS, () => { gl.drawArrays(gl.POINTS, 0, n); });
@@ -153,7 +152,7 @@ function main(image) {
     
     // setup shade range buffers
     gl.useProgram(compileCoordsProgram);
-    gl.bindVertexArray(compileCoordsVertexArrays[i % 2]);
+    gl.bindVertexArray(compileCoordsVertexArrays[step % 2]);
     drawWithTransformFeedback(gl, compileCoordsTransformFeedback, gl.POINTS, () => { gl.drawArrays(gl.POINTS, 0, n); });
 
     gl.useProgram(duplicateColourBufferProgram);
@@ -200,7 +199,6 @@ function main(image) {
   let threshold = 0.2;
   let mode = AGGREGATE;
 
-  let complete = false;
   let x0 = new Float32Array(n);
   function checkComplete() {
     gl.bindBuffer(gl.ARRAY_BUFFER, x0Buffer);
@@ -209,18 +207,18 @@ function main(image) {
     complete = true;
     for (let n of x0) {
       if (n != image.naturalWidth) {
-        complete = false;
-        break;
+        return false;
       }
     }
+    return true;
   }
 
   function full() {
+    console.log("full() threshold =", threshold);
     setupBuffer(gl, x1Buffers[0], new Float32Array(initialX), gl.DYNAMIC_DRAW);
     for (let s = 0; s < image.naturalWidth; s++) {
-      step(s);
-      checkComplete();
-      if (complete) {
+      step(s, threshold);
+      if (checkComplete()) {
         console.log("shading complete");
         break;
       }
@@ -230,32 +228,31 @@ function main(image) {
 
   full();
 
-  const thresholdInput = document.querySelector("#threshold");
+  const thresholdInput = document.getElementById("threshold");
   thresholdInput.value = threshold;
-  thresholdInput.addEventListener("input", () => {
+  thresholdInput.oninput = () => {
     threshold = parseFloat(thresholdInput.value);
-    console.log("Threshold set to", thresholdInput.value);
     full();
-  })
+  };
 
-  const modeToggle = document.querySelector("#mode");
-  modeToggle.addEventListener("click", () => {
+  const modeToggle = document.getElementById("mode");
+  modeToggle.onclick = () => {
     mode = mode == LOCAL ? AGGREGATE : LOCAL;
     modeToggle.textContent = "Mode: " + (mode == LOCAL ? "local" : "aggregate");
     full();
-  });
+  };
 
-  document.addEventListener("keydown", (event) => {
+  document.onkeydown = (event) => {
     if (event.key == "Shift") {
       thresholdInput.step = 0.01;
     }
-  });
+  };
 
-  document.addEventListener("keyup", (event) => {
+  document.onkeyup = (event) => {
     if (event.key == "Shift") {
       thresholdInput.step = 0.05;
     }
-  });
+  };
 
   const downloadAnchor = document.getElementById("download");
   const nameInput = document.getElementById("name");
@@ -273,14 +270,31 @@ function main(image) {
   }
 
   document.getElementById("screenshot").addEventListener('click', screenshot);
-}
 
-function setup() {
-  let image = new Image();
-  image.src = "image.png"
-  image.onload = () => {
-    main(image);
+  document.defaultView.onresize = () => {
+    canvas.width = gl.canvas.clientWidth;
+    canvas.height = gl.canvas.clientHeight;
+    display(false);
   };
 }
 
-setup();
+const image = new Image();
+const file = document.getElementById("image-upload").files[0];
+const reader = new FileReader();
+reader.addEventListener("load", () => {
+  image.src = reader.result;
+}, false);
+
+function loadImage() {
+  const file = document.getElementById("image-upload").files[0];
+  if (file) {
+    reader.readAsDataURL(file);
+    image.onload = () => main(image);
+    console.log("loadImage() image at", image.src);
+  }
+}
+
+if (file) {
+  loadImage();
+}
+
