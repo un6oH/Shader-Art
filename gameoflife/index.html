@@ -29,6 +29,10 @@
         margin-top: 0.5ex;
         margin-bottom: 0;
       }
+
+      #image-upload {
+        margin-bottom: 0.5ex;
+      }
     </style>
     <link rel="icon" type="image/bmp" href="gameoflife_icon.bmp" />
 
@@ -44,6 +48,7 @@
   <body>
     <div id="controls-container">
       <a href="../"><button>Return to main menu</button></a>
+      <p>Select a base image: <input id="image-upload" type="file" onchange="loadImage()"></p>
       <button id="reset">Reset</button>
       <button id="playpause">Start</button>
       <button id="screenshot">Save image</button>

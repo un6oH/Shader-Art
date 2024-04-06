@@ -279,22 +279,26 @@ function main(image) {
 }
 
 const image = new Image();
-const file = document.getElementById("image-upload").files[0];
+image.onload = () => {
+  console.log("creating program with image", image.src);
+  main(image);
+}
+let file = document.getElementById("image-upload").files[0];
 const reader = new FileReader();
 reader.addEventListener("load", () => {
   image.src = reader.result;
 }, false);
 
 function loadImage() {
-  const file = document.getElementById("image-upload").files[0];
+  file = document.getElementById("image-upload").files[0];
   if (file) {
     reader.readAsDataURL(file);
-    image.onload = () => main(image);
-    console.log("loadImage() image at", image.src);
   }
 }
 
 if (file) {
   loadImage();
+} else {
+  image.src = "image.png";
 }
 
