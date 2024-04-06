@@ -4,15 +4,15 @@ Various visualisations, simulations, and image manipulation using WebGL2.
 
 ## Introduction
 
-I started this project to make images that look cool. I had seen videos about GPU acceleration (mostly from @SebastianLague on YouTube), and I wanted to try writing graphics programs myself. GPU acceleration allows you to do parallel calculations several times faster than on the CPU, making it ideal for image processing and simulation.
+I started this project to make images that look cool. I had seen videos about GPU acceleration (mostly from [@SebastianLague](https://www.youtube.com/@SebastianLague) on YouTube), and I wanted to try writing graphics programs myself. GPU acceleration allows you to do parallel calculations several times faster than on the CPU, making it ideal for image processing and simulation.
 
-The programs were made with the goal of generating images to use as wallpapers.
+The programs were made with the purpose of generating images to use as wallpapers.
 
 ## Methods
 
 The project is web-based because it's what I'm familiar with, and because I don't need to wait around for an app to build.
 
-The programs are scripted through the WebGL2 rendering context and written in GLSL. I learned WebGL through the tutorials on [WebGL2Fundamentals](https://webgl2fundamentals.org/), and used [MDN](https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext/) and [docs.gl](https://docs.gl/) as references. 
+The programs are scripted through the WebGL2 rendering context and written in GLSL. I learned WebGL through the tutorials on [WebGL2Fundamentals](https://webgl2fundamentals.org/), and used [MDN](https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext/) and [docs.gl](https://docs.gl/) as references. The apps use a custom WebGL helper library.
 
 The webpages are written in HTML, JS, and GLSL, and run locally. 
 
@@ -20,7 +20,11 @@ The webpages are written in HTML, JS, and GLSL, and run locally.
 
 The programs are a mix of interactive and hacky. Some parameters are available in the web page, while some require you to run the webpage from your computer and change the image files to create your own pictures.
 
+Boids and Mandelbrot set can be run from the demo version, on the GitHub page: [Demos](https://un6oh.github.io/Shader-Art/)
+
 All programs allow you to download the full res image that you create.
+
+A collection of images made with the programs can be found here: [Google Drive](https://drive.google.com/drive/folders/1EiPTVD6AeEmbAaDjvuhKkBIpqo01PhJl?usp=sharing). Some images were edited/composited in paint.net.
 
 ### Conway's Game of Life
 
@@ -56,7 +60,7 @@ Can recolour greyscale images with a variety of preset colour maps and gradients
 
 ![Recolourer example](/thumbnails/recolourer.gif)
 
-### WIP
+### WIP/Planned projects
 
 Fluid simulation: I have a prototype, but with lots of bugs and janky interactivity.
 
