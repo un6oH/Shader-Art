@@ -28,6 +28,10 @@
         height: 100vh;
         position: fixed;
       }
+
+      #image-upload {
+        margin-bottom: 0.5ex;
+      }
     </style>
     <link rel="icon" type="image/bmp" href="../smoothlife/smoothlife_icon1.bmp" />
     <script src="../matrix-math.js"></script>
@@ -41,15 +45,16 @@
   <body>
     <div id="parameter-container">
       <a href="../"><button>Return to main menu</button></a>
+      <p>Select starting image: <input id="image-upload" type="file" onchange="loadImage()"></p>
       <button id="reset">Reset</button>
       <button id="playpause">Start</button>
       <button id="screenshot">Save Image</button>
       <p>Time step: <output id="deltaTimeOutput"></output></p>
       <input id="deltaTime" type="range" value="0.0167" min="0" max="0.1" step="0.0001">
       <p>Cell radius: <output id="cellRadiusOutput"></output></p>
-      <input id="cellRadius" type="number" value="10" min="0.5">
+      <input id="cellRadius" type="number" value="10" min="1">
       <p>Neighbour radius: <output id="neighbourRadiusOutput"></output></p>
-      <input id="neighbourRadius" type="number" value="30" min="1.5">
+      <input id="neighbourRadius" type="number" value="30" min="1">
       <p>Birth lower threshold: <output id="birthLowerOutput"></output></p>
       <input id="birthLower" type="range" value="0.3" min="0" max="1" step="0.01">
       <p>Birth upper threshold: <output id="birthUpperOutput"></output></p>
