@@ -182,46 +182,60 @@ function main(image) {
   const screenshotButton = document.querySelector("#screenshot");
   fpsOutput.textContent = fpsInput.value;
 
-  resetButton.addEventListener('click', () => reset);
-  playToggle.addEventListener('click', () => {
+  resetButton.onclick = reset;
+  playToggle.onclick = () => {
     play = !play;
     playToggle.textContent = play ? "Stop" : "Start";
     if (play) {
       animate();
     }
-  });
-  screenshotButton.addEventListener('click', screenshot);
+  };
+  screenshotButton.onclick = screenshot;
 
-  fpsInput.addEventListener('input', () => {
+  fpsInput.oninput = () => {
     framesPerUpdate = Math.floor(60 / parseFloat(fpsInput.value));
     fpsOutput.textContent = fpsInput.value;
-  });
+  };
   framesPerUpdate = Math.floor(60 / parseFloat(fpsInput.value));
   fpsOutput.textContent = fpsInput.value;
 
-  trailInput.addEventListener('input', () => {
+  trailInput.oninput = () => {
     fadeStrength = 1 / (parseFloat(trailInput.value) + 1);
-  });
+  };
   fadeStrength = 1 / (parseFloat(trailInput.value) + 1);
 
   reset();
 
-  document.addEventListener('keypress', (event) => {
+  document.onkeydown = (event) => {
     if (event.key == ' ') {
       play = !play;
       if (play) {
         animate();
       }
     }
-  })
+  };
 }
 
-function setup() {
-  const image = new Image();
-  image.src = "image.png";
-  image.onload = () => {
-    main(image);
+const image = new Image();
+image.onload = () => {
+  console.log("creating program with image", image.src);
+  main(image);
+}
+let file = document.getElementById("image-upload").files[0];
+const reader = new FileReader();
+reader.onload = () => {
+  image.src = reader.result;
+}
+
+function loadImage() {
+  file = document.getElementById("image-upload").files[0];
+  if (file) {
+    reader.readAsDataURL(file);
   }
 }
 
-setup();
+if (file) {
+  loadImage();
+} else {
+  image.src = "image.png"
+}

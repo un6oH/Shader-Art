@@ -280,17 +280,17 @@ function main(image) {
 
 const image = new Image();
 image.onload = () => {
-  console.log("loadImage() image at", image.src);
+  console.log("creating program with image", image.src);
   main(image);
-};
-const file = document.getElementById("image-upload").files[0];
+}
+let file = document.getElementById("image-upload").files[0];
 const reader = new FileReader();
 reader.onload = () => {
   image.src = reader.result;
 };
 
 function loadImage() {
-  const file = document.getElementById("image-upload").files[0];
+  file = document.getElementById("image-upload").files[0];
   if (file) {
     reader.readAsDataURL(file);
   }
@@ -298,5 +298,7 @@ function loadImage() {
 
 if (file) {
   loadImage();
+} else {
+  image.src = "image.png";
 }
 
