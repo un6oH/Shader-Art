@@ -43,6 +43,10 @@
         height: 9em;
         border: #888 solid;
       }
+
+      #image-upload {
+        margin-bottom: 0.5ex;
+      }
     </style>
     <link rel="icon" type="image/bmp" href="../favicon.bmp" />
 
@@ -59,7 +63,7 @@
     <div id="controls-container">
       <a href="../"><button>Return to main menu</button></a>
       <button id="screenshot">Save image</button><br>
-      <input id="filename" type="text" value="File name (include image type)"><button id="load">Load</button><br>
+      <p>Upload greyscale image: <input id="image-upload" type="file"></p>
       <p>Presets:</p>
       <select id="preset"></select>
       <input id="custom-name" type="text" value="Custom1">
