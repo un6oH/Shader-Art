@@ -32,26 +32,44 @@ function main() {
   ]), previewGL.STATIC_DRAW);
   const previewVertexArray = makeVertexArray(previewGL, [[previewPositionBuffer, previewLocations.position, 2, previewGL.FLOAT]]);
   
+  const image = new Image();
   let imageWidth, imageHeight;
-  let imageName;
+  let imageName = "fluidsimsmoke.png";
   let imageIsLoaded = false;
-  function loadImage(filename) {
+
+  const fileInput = document.getElementById("image-upload");
+  let file = fileInput.files[0];
+  image.onload = () => {
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, image.naturalWidth, image.naturalHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    
+    [imageWidth, imageHeight] = [image.naturalWidth, image.naturalHeight];
+
+    imageIsLoaded = true;
+
+    render();
+  };
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    image.src = reader.result;
+  };
+  function loadImage() {
     canvas.width = gl.canvas.clientWidth;
     canvas.height = gl.canvas.clientHeight;
 
-    let image = new Image();
-    image.src = filename;
-    image.onload = () => {
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, image.naturalWidth, image.naturalHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, image);
-      
-      [imageWidth, imageHeight] = [image.naturalWidth, image.naturalHeight];
-
-      imageName = filename;
-      imageIsLoaded = true;
-
-      render();
+    file = fileInput.files[0];
+    if (file) {
+      imageName = file.name;
+      reader.readAsDataURL(file);
     }
+  }
+  fileInput.onchange = loadImage;
+  
+  if (file) {
+    loadImage();
+  } else {
+    image.src = "fluidsimsmoke.png";
   }
 
   const params = {
@@ -231,14 +249,6 @@ function main() {
     updatePreview();
     render();
   })
-
-  // interactivity
-  const filenameInput = document.getElementById("filename");
-  const loadButton = document.getElementById("load");
-  loadButton.addEventListener("click", () => {
-    console.log("loading image");
-    loadImage(filenameInput.value);
-  });
 
   const revertButton = document.getElementById("revert");
   revertButton.addEventListener('click', () => {
