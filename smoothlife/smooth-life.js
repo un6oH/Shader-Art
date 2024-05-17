@@ -17,14 +17,15 @@ function render(image) {
     deathUpper: 0.5, 
     transitionSmoothRadius: 0.1, 
     lifeSmoothRadius: 0.1,
-  }
+    deltaMultiplier: 1, 
+  };
   const textureWidth = image.width;
   const textureHeight = image.height;
 
   for (let parameter in params) {
     let input = document.getElementById(parameter);
     params[parameter] = parseFloat(input.value);
-    if (["deltaTime", "birthLower", "birthUpper", "deathLower", "deathUpper", "transitionSmoothRadius", "lifeSmoothRadius"].includes(parameter)) {
+    if (["deltaTime", "birthLower", "birthUpper", "deathLower", "deathUpper", "transitionSmoothRadius", "lifeSmoothRadius", "deltaMultiplier"].includes(parameter)) {
       let output = document.getElementById(parameter + "Output");
       output.textContent = input.value;
       input.oninput = () => {
@@ -46,7 +47,7 @@ function render(image) {
   const updateProgram = createProgram(gl, TEXTURE_VS, UPDATE_FS);
   const updateProgramLocations = createLocations(gl, updateProgram, 
     ["position"], 
-    ["flipTexture", "image", "deltaTime", "textureDimensions", "cellRadius", "neighbourRadius", "birthLower", "birthUpper", "deathLower", "deathUpper", "transitionSmoothRadius", "lifeSmoothRadius"]
+    ["flipTexture", "image", "deltaTime", "textureDimensions", "cellRadius", "neighbourRadius", "birthLower", "birthUpper", "deathLower", "deathUpper", "transitionSmoothRadius", "lifeSmoothRadius", "deltaMultiplier"]
   );
   
   const displayProgram = createProgram(gl, TEXTURE_VS, DISPLAY_FS);

@@ -14,6 +14,7 @@ uniform float deathLower;
 uniform float deathUpper;
 uniform float transitionSmoothRadius;
 uniform float lifeSmoothRadius;
+uniform float deltaMultiplier;
 
 out vec4 colour;
 
@@ -71,7 +72,7 @@ void main() {
     newLife = f * g;
   }
 
-  float deltaLife = (newLife - cellLife) * deltaTime;
+  float deltaLife = (newLife - cellLife) * deltaTime * deltaMultiplier;
   float currentValue = texture(image, texCoord).r;
   float newValue = clamp(currentValue + deltaLife, 0.0, 1.0);
   colour = vec4(vec3(newValue), 1.0);

@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Shader art</title>
+    <title>Continuous Game of Life</title>
     <style>
       body {
         margin: 0;
@@ -51,6 +51,8 @@
       <button id="screenshot">Save Image</button>
       <p>Time step: <output id="deltaTimeOutput"></output></p>
       <input id="deltaTime" type="range" value="0.0167" min="0" max="0.1" step="0.0001">
+      <p>Delta multiplier: <output id="deltaMultiplierOutput"></output></p>
+      <input id="deltaMultiplier" type="range" value="1" min="0.1" max="10" step="0.1"> 
       <p>Cell radius: <output id="cellRadiusOutput"></output></p>
       <input id="cellRadius" type="number" value="10" min="1">
       <p>Neighbour radius: <output id="neighbourRadiusOutput"></output></p>
@@ -66,7 +68,7 @@
       <p>Transition smooth radius: <output id="transitionSmoothRadiusOutput"></output></p>
       <input id="transitionSmoothRadius" type="range" value="0.1" min="0" max="1" step="0.001">
       <p>Life smooth radius: <output id="lifeSmoothRadiusOutput"></output></p>
-      <input id="lifeSmoothRadius" type="range" value="0.1" min="0" max="1" step="0.001">      
+      <input id="lifeSmoothRadius" type="range" value="0.1" min="0" max="1" step="0.001">
     </div>
     <canvas id="gl-canvas"></canvas>
     <a id="download-anchor"></a>
