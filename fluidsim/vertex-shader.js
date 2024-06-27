@@ -1,51 +1,76 @@
-const DIFFUSE_VS = `#version 300 es
+const VSTexture = `#version 300 es
 precision highp float;
 
-in vec2 position; // (0, 0) to (1, 1)
+in vec2 clipSpace;
+
+out vec2 position; // coordinates in texCoords
+
+void main() {
+  gl_Position = vec4(clipSpace, 0, 1);
+
+  position = (clipSpace + 1.0) * 0.5;
+}
+`;
+
+const VSDiffuse = `#version 300 es
+precision highp float;
+
+in vec2 pixel; // pixel coordinates
 
 uniform vec2 textureDimensions;
 
-out vec2 texCoord;
-out vec2 texCoord_l;
-out vec2 texCoord_r;
-out vec2 texCoord_t;
-out vec2 texCoord_b;
+out vec2 position; // coordinates in texCoords
+out vec2 position_l; // coordinates of left pixel in texCoords
+out vec2 position_r; // coordinates of right pixel in texCoords
+out vec2 position_t; // coordinates of top pixel in texCoords
+out vec2 position_b; // coordinates of bottom pixel in texCoords
 
 void main() {
-  gl_Position = vec4(position * 2.0 - 1.0, 0.0, 1.0);
+  vec2 px = 1.0 / textureDimensions; // size of one pixel in texture space
 
-  vec2 onePixel = 1.0 / textureDimensions;
-  texCoord = position;
-  texCoord_l = position + vec2(-1, 0) * onePixel;
-  texCoord_r = position + vec2(1, 0) * onePixel;
-  texCoord_t = position + vec2(0, -1) * onePixel;
-  texCoord_b = position + vec2(0, 1) * onePixel; 
+  vec2 normCoords = pixel / textureDimensions;
+  vec2 clipSpace = (normCoords * 2.0 + vec2(-1)) * vec2(1, -1);
+  gl_Position = vec4(clipSpace, 0, 1);
+
+  position = normCoords;
+  position_l = normCoords + vec2(-px.x, 0);
+  position_r = normCoords + vec2(px.x, 0);
+  position_t = normCoords + vec2(0, px.y);
+  position_b = normCoords + vec2(0, -px.y);
 }
-`
+`;
 
-const TEXTURE_VS = `#version 300 es
+const VSApplyForce = `#version 300 es
 precision highp float;
 
-in vec2 position;
+in vec2 position; // position in pixel coords
 
-out vec2 texCoord;
+uniform vec2 textureDimensions;
+uniform float splatRadius;
 
 void main() {
-  gl_Position = vec4(position * 2.0 - 1.0, 0.0, 1.0);
-  texCoord = position;
+  gl_Position = vec4((position / textureDimensions * 2.0 + vec2(-1)) * vec2(1, -1), 0, 1);
+  gl_PointSize = splatRadius * 2.0;
 }
+`;
 
-`
-
-const CANVAS_VS = `#version 300 es
+const VSSetBoundaries = `#version 300 es
 precision highp float;
 
-in vec2 position;
+in vec2 position; // position in texture space
+in vec2 normal; // normal vector of boundary surface
 
-out vec2 texCoord;
+uniform vec2 textureDimensions;
+
+out vec2 texCoords;
+out vec2 v_normal;
 
 void main() {
-  gl_Position = vec4(position * 2.0 - 1.0, 0.0, 1.0);
-  texCoord = position * vec2(1, -1) + vec2(0, 1);
+  vec2 normCoords = position / textureDimensions;
+  vec2 clipSpace = (normCoords * 2.0 + vec2(-1)) * vec2(1, -1);
+  gl_Position = vec4(clipSpace, 0, 1);
+
+  texCoords = normCoords;
+  v_normal = normal;
 }
 `;
