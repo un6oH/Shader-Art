@@ -59,16 +59,32 @@ function bindTextureToLocation(gl, location, index, texture) {
   gl.bindTexture(gl.TEXTURE_2D, texture);
 }
 
-function createFramebuffer(gl, texture) {
+function createFramebuffer(gl, ...textures) {
   let framebuffer = gl.createFramebuffer();
   gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+  textures.forEach((texture, i) => {
+    gl.framebufferTexture2D(
+      gl.FRAMEBUFFER, 
+      [gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2, gl.COLOR_ATTACHMENT3, gl.COLOR_ATTACHMENT4, gl.COLOR_ATTACHMENT5, gl.COLOR_ATTACHMENT6, gl.COLOR_ATTACHMENT7, gl.COLOR_ATTACHMENT8][i], 
+      gl.TEXTURE_2D, 
+      texture, 
+      0
+    );
+  });
   return framebuffer;
 }
 
-function setupFramebuffer(gl, framebuffer, texture) {
+function setupFramebuffer(gl, framebuffer, ...textures) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+  textures.forEach((texture, i) => {
+    gl.framebufferTexture2D(
+      gl.FRAMEBUFFER, 
+      [gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2, gl.COLOR_ATTACHMENT3, gl.COLOR_ATTACHMENT4, gl.COLOR_ATTACHMENT5, gl.COLOR_ATTACHMENT6, gl.COLOR_ATTACHMENT7, gl.COLOR_ATTACHMENT8][i], 
+      gl.TEXTURE_2D, 
+      texture, 
+      0
+    );
+  });
 }
 
 function makeBuffer(gl, data, usage) {
