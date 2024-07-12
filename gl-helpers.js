@@ -62,29 +62,33 @@ function bindTextureToLocation(gl, location, index, texture) {
 function createFramebuffer(gl, ...textures) {
   let framebuffer = gl.createFramebuffer();
   gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  const attachments = [gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2, gl.COLOR_ATTACHMENT3, gl.COLOR_ATTACHMENT4, gl.COLOR_ATTACHMENT5, gl.COLOR_ATTACHMENT6, gl.COLOR_ATTACHMENT7, gl.COLOR_ATTACHMENT8];
   textures.forEach((texture, i) => {
     gl.framebufferTexture2D(
       gl.FRAMEBUFFER, 
-      [gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2, gl.COLOR_ATTACHMENT3, gl.COLOR_ATTACHMENT4, gl.COLOR_ATTACHMENT5, gl.COLOR_ATTACHMENT6, gl.COLOR_ATTACHMENT7, gl.COLOR_ATTACHMENT8][i], 
+      attachments[i], 
       gl.TEXTURE_2D, 
       texture, 
       0
     );
   });
+  gl.drawBuffers(attachments.slice(0, textures.length));
   return framebuffer;
 }
 
 function setupFramebuffer(gl, framebuffer, ...textures) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  const attachments = [gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2, gl.COLOR_ATTACHMENT3, gl.COLOR_ATTACHMENT4, gl.COLOR_ATTACHMENT5, gl.COLOR_ATTACHMENT6, gl.COLOR_ATTACHMENT7, gl.COLOR_ATTACHMENT8];
   textures.forEach((texture, i) => {
     gl.framebufferTexture2D(
       gl.FRAMEBUFFER, 
-      [gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2, gl.COLOR_ATTACHMENT3, gl.COLOR_ATTACHMENT4, gl.COLOR_ATTACHMENT5, gl.COLOR_ATTACHMENT6, gl.COLOR_ATTACHMENT7, gl.COLOR_ATTACHMENT8][i], 
+      attachments[i], 
       gl.TEXTURE_2D, 
       texture, 
       0
     );
   });
+  gl.drawBuffers(attachments.slice(0, textures.length));
 }
 
 function makeBuffer(gl, data, usage) {
@@ -137,6 +141,10 @@ function drawWithTransformFeedback(gl, transformFeedback, primitive, drawFunctio
 }
 
 function setFramebuffer(gl, framebuffer, width, height) { 
+  if (!width || !height) {
+    console.log("setFramebuffer() viewport not specified");
+    return;
+  }
   gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
   gl.viewport(0, 0, width, height);
 }

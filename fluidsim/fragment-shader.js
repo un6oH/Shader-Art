@@ -20,6 +20,23 @@ void main() {
 }
 `;
 
+const FSCopyField = `#version 300 es
+precision highp float;
+
+in vec2 position; // texCoords
+
+uniform sampler2D velocityField;
+uniform sampler2D pressureField;
+
+layout(location = 0) out vec2 velocity;
+layout(location = 1) out float pressure;
+
+void main() {
+  velocity = texture(velocityField, position).xy;
+  pressure = texture(pressureField, position).x;
+}
+`;
+
 const FSDiffuse = `#version 300 es
 precision highp float;
 
@@ -60,14 +77,16 @@ void main() {
 const FSApplyForce = `#version 300 es
 precision highp float;
 
-uniform vec2 force;
+uniform vec2 inputVelocity;
 uniform float deltaTime;
 uniform float splatRadius;
 
 layout(location = 0) out vec2 velocity; // output is blended
+layout(location = 1) out float pressure;
 
 void main() {
-  velocity = force * deltaTime * length(gl_PointCoord.xy - splatRadius) / splatRadius;
+  velocity = inputVelocity * deltaTime * max((1.0 - length(gl_PointCoord.xy - 0.5) * 2.0), 0.0);
+  pressure = 0.0;
 }
 `;
 
@@ -194,6 +213,10 @@ void main() {
       break;
     case 1: 
       c.x = texture(pressureField, position).x;
+      break;
+    case 2: 
+      c.xy = texture(velocityField, position).xy;
+      c.z = 0.5;
       break;
   }
   colour = c;

@@ -29,7 +29,7 @@ void main() {
   vec2 px = 1.0 / textureDimensions; // size of one pixel in texture space
 
   vec2 normCoords = pixel / textureDimensions;
-  vec2 clipSpace = (normCoords * 2.0 + vec2(-1)) * vec2(1, -1);
+  vec2 clipSpace = normCoords * 2.0 + vec2(-1);
   gl_Position = vec4(clipSpace, 0, 1);
 
   position = normCoords;
@@ -43,9 +43,9 @@ void main() {
 const VSApplyForce = `#version 300 es
 precision highp float;
 
-in vec2 position; // position in pixel coords
+in vec2 position; // position in offset canvas coords
 
-uniform vec2 textureDimensions;
+uniform vec2 textureDimensions; // display size
 uniform float splatRadius;
 
 void main() {
