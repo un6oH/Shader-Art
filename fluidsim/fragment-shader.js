@@ -4,19 +4,16 @@ precision highp float;
 in vec2 position; // coordinates in texCoords
 
 uniform sampler2D velocityField; // RG32F texture
-uniform sampler2D pressureField; // R32F texture
 uniform float deltaTime;
 uniform vec2 dx; // simulation domain * dx = texture domain | texture domain * rdx = simulation domain
 
-layout(location = 0) out vec2 velocity;
-layout(location = 1) out float pressure;
+out vec2 velocity;
 
 void main() {
   vec2 v0 = texture(velocityField, position).xy; // velocity of fragment
   vec2 samplePosition = position - v0 * deltaTime * dx;
 
   velocity = texture(velocityField, samplePosition).xy;
-  pressure = texture(pressureField, samplePosition).x;
 }
 `;
 
@@ -26,14 +23,11 @@ precision highp float;
 in vec2 position; // texCoords
 
 uniform sampler2D velocityField;
-uniform sampler2D pressureField;
 
 layout(location = 0) out vec2 velocity;
-layout(location = 1) out float pressure;
 
 void main() {
   velocity = texture(velocityField, position).xy;
-  pressure = texture(pressureField, position).x;
 }
 `;
 
@@ -47,29 +41,25 @@ in vec2 position_t; // coordinates of top pixel in texCoords
 in vec2 position_b; // coordinates of bottom pixel in texCoords
 
 uniform sampler2D velocityResult; // Solution matrix * field = result
-uniform sampler2D pressureResult; // Solution matrix * field = result
 uniform sampler2D velocityField; // RG32F texture
-uniform sampler2D pressureField; // R32F texture
 uniform float deltaTime;
 uniform vec2 dx; // simulation domain * dx = texture domain
 
-layout(location = 0) out vec2 velocity;
-layout(location = 1) out float pressure;
+out vec2 velocity;
 
 void main() {
-  vec3 c = vec3(texture(velocityField, position).xy, texture(pressureField, position).x);
-  vec3 l = vec3(texture(velocityField, position_l).xy, texture(pressureField, position_l).x);
-  vec3 r = vec3(texture(velocityField, position_r).xy, texture(pressureField, position_r).x);
-  vec3 t = vec3(texture(velocityField, position_t).xy, texture(pressureField, position_t).x);
-  vec3 b = vec3(texture(velocityField, position_b).xy, texture(pressureField, position_b).x);
-  vec3 result = vec3(texture(velocityResult, position).xy, texture(pressureResult, position).x);
+  vec2 c = texture(velocityField, position).xy;
+  vec2 l = texture(velocityField, position_l).xy;
+  vec2 r = texture(velocityField, position_r).xy;
+  vec2 t = texture(velocityField, position_t).xy;
+  vec2 b = texture(velocityField, position_b).xy;
+  vec2 result = texture(velocityResult, position).xy;
 
-  vec3 alpha = c * c / deltaTime;
-  vec3 rBeta = 1.0 / (4.0 + alpha);
-  vec3 new = (l + r + t + b + alpha * result) * rBeta;
+  vec2 alpha = c * c / deltaTime;
+  vec2 rBeta = 1.0 / (4.0 + alpha);
+  vec2 new = (l + r + t + b + alpha * result) * rBeta;
 
   velocity = new.xy;
-  pressure = new.z;
 }
 `;
 
@@ -81,12 +71,10 @@ uniform vec2 inputVelocity;
 uniform float deltaTime;
 uniform float splatRadius;
 
-layout(location = 0) out vec2 velocity; // output is blended
-layout(location = 1) out float pressure;
+out vec2 velocity; // output is blended
 
 void main() {
   velocity = inputVelocity * deltaTime * max((1.0 - length(gl_PointCoord.xy - 0.5) * 2.0), 0.0);
-  pressure = 0.0;
 }
 `;
 
@@ -159,7 +147,7 @@ uniform sampler2D velocityField;
 uniform sampler2D pressureField;
 uniform float dx;
 
-layout(location = 0) out vec2 velocity;
+out vec2 velocity;
 
 void main() {
   float l = texture(pressureField, position_l).x;

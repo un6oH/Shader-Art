@@ -12,26 +12,18 @@ function main() {
   // programs
   console.log("creating advect program");
   const advectProgram = createProgram(gl, VSTexture, FSAdvect);
-  const advectLocations = createLocations(gl, advectProgram, ["clipSpace"], ["velocityField", "pressureField", "deltaTime", "dx"]);
-  gl.useProgram(advectProgram);
-  gl.uniform1i(advectLocations.velocityField, 0);
-  gl.uniform1i(advectLocations.pressureField, 1);
+  const advectLocations = createLocations(gl, advectProgram, ["clipSpace"], ["velocityField", "deltaTime", "dx"]);
 
   console.log("creating copy field program");
   const copyFieldProgram = createProgram(gl, VSTexture, FSCopyField);
-  const copyFieldLocations = createLocations(gl, copyFieldProgram, ["clipSpace"], ["velocityField", "pressureField"]);
-  gl.useProgram(copyFieldProgram);
-  gl.uniform1i(copyFieldLocations.velocityField, 0);
-  gl.uniform1i(copyFieldLocations.pressureField, 1);
+  const copyFieldLocations = createLocations(gl, copyFieldProgram, ["clipSpace"], ["velocityField"]);
 
   console.log("creating diffuse program"); 
   const diffuseProgram = createProgram(gl, VSDiffuse, FSDiffuse);
-  const diffuseLocations = createLocations(gl, diffuseProgram, ["pixel"], ["textureDimensions", "velocityResult", "pressureResult", "velocityField", "pressureField", "deltaTime", "dx"]);
+  const diffuseLocations = createLocations(gl, diffuseProgram, ["pixel"], ["textureDimensions", "velocityResult", "velocityField", "deltaTime", "dx"]);
   gl.useProgram(diffuseProgram);
   gl.uniform1i(diffuseLocations.velocityResult, 0);
-  gl.uniform1i(diffuseLocations.pressureResult, 1);
-  gl.uniform1i(diffuseLocations.velocityField, 2);
-  gl.uniform1i(diffuseLocations.pressureField, 3);
+  gl.uniform1i(diffuseLocations.velocityField, 1);
 
   console.log("creating apply force program");
   const applyForceProgram = createProgram(gl, VSApplyForce, FSApplyForce);
@@ -86,6 +78,14 @@ function main() {
     createTexture(gl, [gl.LINEAR, gl.LINEAR, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]),
     createTexture(gl, [gl.LINEAR, gl.LINEAR, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]),
   ];
+  const velocityFramebuffers = [
+    gl.createFramebuffer(), 
+    gl.createFramebuffer(), 
+  ];
+  const pressureFramebuffers = [
+    gl.createFramebuffer(), 
+    gl.createFramebuffer(), 
+  ];
   const fieldFramebuffers = [
     gl.createFramebuffer(), 
     gl.createFramebuffer(), 
@@ -118,34 +118,35 @@ function main() {
       0, 0, textureWidth, textureHeight, 0, textureHeight
     ]), gl.STATIC_DRAW);
 
-    // textures
+    // textures and framebuffers
+    let zeroes = new Float32Array([0, 0, 0, 0]);
     [0, 1].forEach((i) => {
       gl.bindTexture(gl.TEXTURE_2D, velocityFieldTextures[i]);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, textureWidth, textureHeight, 0, gl.RG, gl.FLOAT, null);
       
       gl.bindTexture(gl.TEXTURE_2D, pressureFieldTextures[i]);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, textureWidth, textureHeight, 0, gl.RED, gl.FLOAT, null);
+
+      setupFramebuffer(gl, velocityFramebuffers[i], velocityFieldTextures[i]);
+      gl.clearBufferfv(gl.COLOR, 0, zeroes);
+      setupFramebuffer(gl, pressureFramebuffers[i], pressureFieldTextures[i]);
+      gl.clearBufferfv(gl.COLOR, 0, zeroes);
+      setupFramebuffer(gl, fieldFramebuffers[i], velocityFieldTextures[i], pressureFieldTextures[i]);
+      gl.clearBufferfv(gl.COLOR, 0, zeroes);
     });
 
     gl.bindTexture(gl.TEXTURE_2D, velocityResultTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, textureWidth, textureHeight, 0, gl.RG, gl.FLOAT, null);
     gl.bindTexture(gl.TEXTURE_2D, pressureResultTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, textureWidth, textureHeight, 0, gl.RED, gl.FLOAT, null);
+    setupFramebuffer(gl, resultFramebuffer, velocityResultTexture, pressureResultTexture);
+    gl.clearBufferfv(gl.COLOR, 0, zeroes);
     
     gl.bindTexture(gl.TEXTURE_2D, divergenceResultTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, textureWidth, textureHeight, 0, gl.RED, gl.FLOAT, null);
-    
-    // framebuffers
-    let zeroes = new Float32Array([0, 0, 0, 0]);
-    setupFramebuffer(gl, fieldFramebuffers[0], velocityFieldTextures[0], pressureFieldTextures[0]);
-    gl.clearBufferfv(gl.COLOR, 0, zeroes); gl.clearBufferfv(gl.COLOR, 1, zeroes);
-    setupFramebuffer(gl, fieldFramebuffers[1], velocityFieldTextures[1], pressureFieldTextures[1]);
-    gl.clearBufferfv(gl.COLOR, 0, zeroes); gl.clearBufferfv(gl.COLOR, 1, zeroes);
-
-    setupFramebuffer(gl, resultFramebuffer, velocityResultTexture, pressureResultTexture);
-    gl.clearBufferfv(gl.COLOR, 0, zeroes);
     setupFramebuffer(gl, divergenceResultFramebuffer, divergenceResultTexture);
     gl.clearBufferfv(gl.COLOR, 0, zeroes);
+
   }
   setup();
 
@@ -166,11 +167,10 @@ function main() {
 
     gl.bindVertexArray(advectVertexArray);
     bindTextureToLocation(gl, advectLocations.velocityField, 0, velocityFieldTextures[step % 2]);
-    bindTextureToLocation(gl, advectLocations.pressureField, 1, pressureFieldTextures[step % 2]);
     gl.uniform1f(advectLocations.deltaTime, deltaTime);
     gl.uniform2fv(advectLocations.dx, params.dx);
 
-    setFramebuffer(gl, fieldFramebuffers[(step + 1) % 2], textureWidth, textureHeight);
+    setFramebuffer(gl, velocityFramebuffers[(step + 1) % 2], textureWidth, textureHeight);
     gl.clearBufferfv(gl.COLOR, 0, [0.0, 0.0, 0.0, 0.0]);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
