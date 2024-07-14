@@ -17,17 +17,31 @@ void main() {
 }
 `;
 
-const FSCopyField = `#version 300 es
+const FSCopyVelocity = `#version 300 es
 precision highp float;
 
 in vec2 position; // texCoords
 
 uniform sampler2D velocityField;
 
-layout(location = 0) out vec2 velocity;
+out vec2 velocity;
 
 void main() {
   velocity = texture(velocityField, position).xy;
+}
+`;
+
+const FSCopyPressure = `#version 300 es
+precision highp float;
+
+in vec2 position; // texCoords
+
+uniform sampler2D pressureField;
+
+out float pressure;
+
+void main() {
+  pressure = texture(pressureField, position).x;
 }
 `;
 
@@ -145,7 +159,7 @@ in vec2 position_b; // coordinates of bottom pixel in texCoords
 
 uniform sampler2D velocityField;
 uniform sampler2D pressureField;
-uniform float dx;
+uniform vec2 dx;
 
 out vec2 velocity;
 
@@ -156,27 +170,39 @@ void main() {
   float b = texture(pressureField, position_b).x;
 
   vec2 v = texture(velocityField, position).xy;
-  velocity = v - 0.5 / dx * vec2(r - l, t - b);
+  velocity = v - vec2(0.5) / dx * vec2(r - l, t - b);
 }
 `;
 
-const FSSetBoundaries = `#version 300 es
+const FSSetBoundariesVelocity = `#version 300 es
 precision highp float;
 
 in vec2 texCoords; // position in texture coords
 in vec2 v_normal; // normalised vector
 
 uniform sampler2D velocityField;
-uniform sampler2D pressureField;
 uniform float px; // length of pixel in texture space
 
-layout(location = 0) out vec2 velocity;
-layout(location = 1) out float pressure;
+out vec2 velocity;
 
 void main() {
   vec2 v = texture(velocityField, texCoords + v_normal * px).xy;
   velocity = -v;
+}
+`;
 
+const FSSetBoundariesPressure = `#version 300 es
+precision highp float;
+
+in vec2 texCoords; // position in texture coords
+in vec2 v_normal; // normalised vector
+
+uniform sampler2D pressureField;
+uniform float px; // length of pixel in texture space
+
+out float pressure;
+
+void main() {
   float p = texture(pressureField, texCoords + v_normal * px).x;
   pressure = p;
 }
