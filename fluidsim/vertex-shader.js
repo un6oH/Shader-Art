@@ -28,8 +28,8 @@ out vec2 position_b; // coordinates of bottom pixel in texCoords
 void main() {
   vec2 px = 1.0 / textureDimensions; // size of one pixel in texture space
 
-  vec2 normCoords = pixel / textureDimensions;
-  vec2 clipSpace = normCoords * 2.0 + vec2(-1);
+  vec2 normCoords = pixel * px;
+  vec2 clipSpace = normCoords * 2.0 - 1.0;
   gl_Position = vec4(clipSpace, 0, 1);
 
   position = normCoords;
@@ -57,20 +57,18 @@ void main() {
 const VSSetBoundaries = `#version 300 es
 precision highp float;
 
-in vec2 position; // position in texture space
+in vec2 pixel; // position in pixel space
 in vec2 normal; // normal vector of boundary surface
 
 uniform vec2 textureDimensions;
 
-out vec2 texCoords;
 out vec2 v_normal;
 
 void main() {
-  vec2 normCoords = position / textureDimensions;
+  vec2 normCoords = pixel / textureDimensions;
   vec2 clipSpace = (normCoords * 2.0 + vec2(-1)) * vec2(1, -1);
   gl_Position = vec4(clipSpace, 0, 1);
 
-  texCoords = normCoords;
-  v_normal = normal;
+  v_normal = normal / textureDimensions;
 }
 `;
