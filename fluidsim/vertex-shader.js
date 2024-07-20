@@ -40,7 +40,7 @@ void main() {
 }
 `;
 
-const VSApplyForce = `#version 300 es
+const VSSplat = `#version 300 es
 precision highp float;
 
 in vec2 position; // position in offset canvas coords

@@ -4,6 +4,10 @@ function main() {
 
   canvas.width = gl.canvas.clientWidth;
   canvas.height = gl.canvas.clientHeight;
+  window.onresize = () => {
+    canvas.width = gl.canvas.clientWidth;
+    canvas.height = gl.canvas.clientHeight;
+  }
 
   gl.getExtension("OES_texture_float_linear");
   gl.getExtension("EXT_color_buffer_float");
@@ -36,7 +40,7 @@ function main() {
   gl.uniform1i(diffuseLocations.boundaryNormal, 3);
 
   console.log("creating apply force program");
-  const applyForceProgram = createProgram(gl, VSApplyForce, FSApplyForce);
+  const applyForceProgram = createProgram(gl, VSSplat, FSApplyForce);
   const applyForceLocations = createLocations(gl, applyForceProgram, ["position"], ["textureDimensions", "splatRadius", "inputVelocity", "deltaTime"]);
 
   console.log("creating divergence calc program");
@@ -59,16 +63,35 @@ function main() {
   gl.uniform1i(gradientSubtractLocations.velocityField, 0);
   gl.uniform1i(gradientSubtractLocations.pressureField, 1);
 
+  console.log("creating dye advect program");
+  const advectDyeProgram = createProgram(gl, VSTexture, FSAdvectDye);
+  const advectDyeLocations = createLocations(gl, advectDyeProgram, ["clipSpace"], ["velocityField", "dyeField", "deltaTime", "dx"]);
+  gl.useProgram(advectDyeProgram);
+  gl.uniform1i(advectDyeLocations.velocityField, 0);
+  gl.uniform1i(advectDyeLocations.dyeField, 1);
+
+  console.log("creating dye diffuse program");
+  const diffuseDyeProgram = createProgram(gl, VSDiffuse, FSDiffuseDye);
+  const diffuseDyeLocations = createLocations(gl, diffuseDyeProgram, ["pixel"], ["textureDimensions", "dyeResult", "dyeField", "boundaryBoolean", "boundaryNormal", "deltaTime", "dx"]);
+  gl.useProgram(diffuseDyeProgram);
+  gl.uniform1i(diffuseDyeLocations.dyeResult, 0);
+  gl.uniform1i(diffuseDyeLocations.dyeField, 1);
+  gl.uniform1i(diffuseDyeLocations.boundaryBoolean, 2);
+  gl.uniform1i(diffuseDyeLocations.boundaryNormal, 3);
+  
+  console.log("creating dye add program");
+  const addDyeProgram = createProgram(gl, VSSplat, FSAddDye);
+  const addDyeLocations = createLocations(gl, addDyeProgram, ["position"], ["textureDimensions", "splatRadius", "inputDensity"]);
+
   console.log("creating displayProgram");
   const displayProgram = createProgram(gl, VSTexture, FSDisplayTexture);
-  const displayLocations = createLocations(gl, displayProgram, ["clipSpace"], ["velocityField", "pressureField", "boundaryBoolean", "divergenceResult", "gradientField", "boundaryNormal", "simulationDimensions", "mode"]);
+  const displayLocations = createLocations(gl, displayProgram, ["clipSpace"], ["velocityField", "pressureField", "boundaryBoolean", "divergenceResult", "dyeField", "simulationDimensions", "mode"]);
   gl.useProgram(displayProgram);
   gl.uniform1i(displayLocations.velocityField, 0);
   gl.uniform1i(displayLocations.pressureField, 1);
   gl.uniform1i(displayLocations.boundaryBoolean, 2);
   gl.uniform1i(displayLocations.divergenceResult, 3);
-  gl.uniform1i(displayLocations.gradientField, 4);
-  gl.uniform1i(displayLocations.boundaryNormal, 4);
+  gl.uniform1i(displayLocations.dyeField, 4);
 
   // define buffers
   const clipSpaceBuffer = makeBuffer(gl, new Float32Array([
@@ -96,6 +119,15 @@ function main() {
     gl.createFramebuffer(), 
   ];
 
+  const dyeTextures = [
+    createTexture(gl, [gl.LINEAR, gl.LINEAR, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]),
+    createTexture(gl, [gl.LINEAR, gl.LINEAR, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]),
+  ];
+  const dyeFramebuffers = [
+    gl.createFramebuffer(), 
+    gl.createFramebuffer(), 
+  ];
+
   // non-alternating framebuffers
   const velocityResultTexture = createTexture(gl, [gl.LINEAR, gl.LINEAR, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
   const velocityResultFramebuffer = gl.createFramebuffer();
@@ -107,10 +139,12 @@ function main() {
   const boundaryNormalTexture = createTexture(gl, [gl.NEAREST, gl.NEAREST, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
   const boundaryFramebuffer = gl.createFramebuffer();
 
-  let textureWidth = 256;
-  let textureHeight = 256;
-  let simulationWidth = 100;
-  let simulationHeight = 100;
+  const dyeResultTexture = createTexture(gl, [gl.LINEAR, gl.LINEAR, gl.CLAMP_TO_EDGE, gl.CLAMP_TO_EDGE]);
+
+  let textureWidth = 512;
+  let textureHeight = 512;
+  let simulationWidth = 100.0;
+  let simulationHeight = 100.0;
 
   const params = {
     dx: [textureWidth / simulationWidth, textureHeight / simulationHeight],
@@ -153,11 +187,16 @@ function main() {
       
       gl.bindTexture(gl.TEXTURE_2D, pressureTextures[i]);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, textureWidth, textureHeight, 0, gl.RED, gl.FLOAT, null);
+      
+      gl.bindTexture(gl.TEXTURE_2D, dyeTextures[i]);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, textureWidth, textureHeight, 0, gl.RED, gl.FLOAT, null);
 
       setupFramebuffer(gl, velocityFramebuffers[i], velocityTextures[i]);
       gl.clearBufferfv(gl.COLOR, 0, zeroes);
       setupFramebuffer(gl, pressureFramebuffers[i], pressureTextures[i]);
       gl.clearBufferfv(gl.COLOR, 0, zeroes);
+      setupFramebuffer(gl, dyeFramebuffers[i], dyeTextures[i]);
+      gl.clearBufferfv(gl.COLOR, 0, [1.0, 0.0, 0.0, 0.0]);
     });
 
     gl.bindTexture(gl.TEXTURE_2D, velocityResultTexture);
@@ -175,6 +214,9 @@ function main() {
     gl.bindTexture(gl.TEXTURE_2D, boundaryNormalTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, textureWidth, textureHeight, 0, gl.RG, gl.FLOAT, null);
     setupFramebuffer(gl, boundaryFramebuffer, boundaryBooleanTexture, boundaryNormalTexture);
+
+    gl.bindTexture(gl.TEXTURE_2D, dyeResultTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, textureWidth, textureHeight, 0, gl.RED, gl.FLOAT, null);
 
     // set boundaries
     gl.useProgram(setBoundariesProgram);
@@ -194,10 +236,11 @@ function main() {
     console.log("update()", deltaTime);
     advect(deltaTime);
     diffuse(deltaTime);
-    if (applyForce) {
+    if (movementX != 0 && movementY != 0) {
       addForce(deltaTime);
     }
     project();
+    updateDye(deltaTime);
   }
 
   const advectVertexArray = makeVertexArray(gl, [[clipSpaceBuffer, advectLocations.clipSpace, 2, gl.FLOAT]]);
@@ -220,14 +263,18 @@ function main() {
   const diffuseVertexArray = makeVertexArray(gl, [[pixelCoordBuffer, diffuseLocations.pixel, 2, gl.FLOAT]]);
   function diffuse(deltaTime) {
     // console.log("diffuse()");
+
     // copy fields to result textures
-    gl.useProgram(copyVelocityProgram);
+    // gl.useProgram(copyVelocityProgram);
 
-    gl.bindVertexArray(copyVelocityVertexArray);
-    bindTextureToLocation(gl, copyVelocityLocations.velocityField, 0, velocityTextures[step % 2]);
+    // gl.bindVertexArray(copyVelocityVertexArray);
+    // bindTextureToLocation(gl, copyVelocityLocations.velocityField, 0, velocityTextures[step % 2]);
 
-    setFramebuffer(gl, velocityResultFramebuffer, textureWidth, textureHeight);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    // setFramebuffer(gl, velocityResultFramebuffer, textureWidth, textureHeight);
+    // gl.drawArrays(gl.TRIANGLES, 0, 6);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, velocityFramebuffers[step % 2]);
+    gl.bindTexture(gl.TEXTURE_2D, velocityResultTexture);
+    gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RG32F, 0, 0, textureWidth, textureHeight, 0);
 
     // diffusion algorithm
     gl.useProgram(diffuseProgram);
@@ -238,7 +285,7 @@ function main() {
     gl.uniform1f(diffuseLocations.deltaTime, deltaTime);
     gl.uniform2fv(diffuseLocations.dx, params.dx);
 
-    for (let i = 0; i < 64; ++i) {
+    for (let i = 0; i < 20; ++i) {
       bindTextureToLocation(gl, diffuseLocations.velocityField, 1, velocityTextures[step % 2]);
       
       setFramebuffer(gl, velocityFramebuffers[(step + 1) % 2], textureWidth, textureHeight);
@@ -247,7 +294,6 @@ function main() {
     }
   }
 
-  let applyForce = false;
   let mouseX, mouseY, movementX, movementY;
 
   const forcePositionBuffer = gl.createBuffer();
@@ -279,7 +325,7 @@ function main() {
     let simDX = textureDX * (simulationWidth / textureWidth);
     let simDY = textureDY * (simulationHeight / textureHeight);
     
-    // calculate force
+    // calculate velocity
     let velX = simDX / deltaTime;
     let velY = simDY / deltaTime * -1;
 
@@ -314,10 +360,8 @@ function main() {
   const gradientSubtractVertexArray = makeVertexArray(gl, [[pixelCoordBuffer, gradientSubtractLocations.pixel, 2, gl.FLOAT]]);
   const copyPressureVertexArray = makeVertexArray(gl, [[clipSpaceBuffer, copyPressureLocations.clipSpace, 2, gl.FLOAT]]);
   
-  const gradientTexture = createTexture(gl);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, textureWidth, textureHeight, 0, gl.RG, gl.FLOAT, null);
-  const gradientFramebuffer = createFramebuffer(gl, gradientTexture);
   
+  let gradientSubtractEnabled = true;
   function project() {
     // divergence calculation
     gl.useProgram(divergenceCalcProgram);
@@ -354,47 +398,138 @@ function main() {
     bindTextureToLocation(gl, solvePressureLocations.boundaryBoolean, 2, boundaryBooleanTexture);
     bindTextureToLocation(gl, solvePressureLocations.boundaryNormal, 3, boundaryNormalTexture);
 
-    for (let i = 0; i < 80; ++i) {
+    for (let i = 0; i < 40; ++i) {
       bindTextureToLocation(gl, solvePressureLocations.pressureField, 1, pressureTextures[i % 2]);
 
       setFramebuffer(gl, pressureFramebuffers[(i + 1) % 2], textureWidth, textureHeight);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 
-    // // subtract gradient
-    gl.useProgram(gradientSubtractProgram);
+    // subtract gradient
+    if (gradientSubtractEnabled) {
+      gl.useProgram(gradientSubtractProgram);
 
-    gl.bindVertexArray(gradientSubtractVertexArray);
-    gl.uniform2f(gradientSubtractLocations.textureDimensions, textureWidth, textureHeight);
-    bindTextureToLocation(gl, gradientSubtractLocations.velocityField, 0, velocityTextures[step % 2]);
-    bindTextureToLocation(gl, gradientSubtractLocations.pressureField, 1, pressureTextures[0]);
-    gl.uniform2fv(gradientSubtractLocations.dx, params.dx);
+      gl.bindVertexArray(gradientSubtractVertexArray);
+      gl.uniform2f(gradientSubtractLocations.textureDimensions, textureWidth, textureHeight);
+      bindTextureToLocation(gl, gradientSubtractLocations.velocityField, 0, velocityTextures[step % 2]);
+      bindTextureToLocation(gl, gradientSubtractLocations.pressureField, 1, pressureTextures[0]);
+      gl.uniform2fv(gradientSubtractLocations.dx, params.dx);
 
-    // setFramebuffer(gl, velocityFramebuffers[(step + 1) % 2], textureWidth, textureHeight);
-    setFramebuffer(gl, gradientFramebuffer, textureWidth, textureHeight);
+      setFramebuffer(gl, velocityFramebuffers[(step + 1) % 2], textureWidth, textureHeight);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      ++step;
+    }
+  }
+
+  const dyePositionBuffer = gl.createBuffer();
+  const addDyeVertexArray = makeVertexArray(gl, [[dyePositionBuffer, addDyeLocations.position, 2, gl.FLOAT]]);
+  function addDye() {
+    // position
+    let width = canvas.width;
+    let height = canvas.height;
+
+    let clientAspect = canvas.width / canvas.height;
+    let outputAspect = textureWidth / textureHeight;
+    let correctionFactor = clientAspect / outputAspect;
+    if (clientAspect < outputAspect) {
+      height *= correctionFactor;
+    } else {
+      width /= correctionFactor;
+    }
+
+    let offsetX = (canvas.width - width) / 2;
+    let offsetY = (canvas.height - height) / 2;
+    let textureX = mouseX - offsetX;
+    let textureY = mouseY - offsetY;
+
+    gl.useProgram(addDyeProgram);
+
+    setupBuffer(gl, dyePositionBuffer, new Float32Array([textureX, textureY]), gl.STATIC_DRAW);
+    gl.bindVertexArray(addDyeVertexArray);
+    gl.uniform2f(addDyeLocations.textureDimensions, width, height);
+    gl.uniform1f(addDyeLocations.splatRadius, 10);
+    gl.uniform1f(addDyeLocations.inputDensity, 1);
+
+    setFramebuffer(gl, dyeFramebuffers[dyeStep % 2], textureWidth, textureHeight);
+    
+    gl.enable(gl.BLEND);
+    gl.blendEquation(gl.FUNC_ADD);
+    gl.blendFunc(gl.ONE, gl.ONE);
+    gl.drawArrays(gl.POINTS, 0, 1);
+    gl.disable(gl.BLEND);
+  }
+
+  let dyeStep = 0;
+  const advectDyeVertexArray = makeVertexArray(gl, [[clipSpaceBuffer, advectDyeLocations.clipSpace, 2, gl.FLOAT]]);
+  const diffuseDyeVertexArray = makeVertexArray(gl, [[pixelCoordBuffer, diffuseLocations.pixel, 2, gl.FLOAT]]);
+  function updateDye(deltaTime) {
+    // if (mouseIsPressed) {
+    //   addDye();
+    // }
+
+    // advect
+    gl.useProgram(advectDyeProgram);
+
+    gl.bindVertexArray(advectDyeVertexArray);
+    bindTextureToLocation(gl, advectDyeLocations.velocityField, 0, velocityTextures[step % 2]);
+    bindTextureToLocation(gl, advectDyeLocations.dyeField, 1, dyeTextures[dyeStep % 2]);
+    gl.uniform1f(advectDyeLocations.deltaTime, deltaTime);
+    gl.uniform2fv(advectDyeLocations.dx, params.dx);
+
+    setFramebuffer(gl, dyeFramebuffers[(dyeStep + 1) % 2], textureWidth, textureHeight);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    // ++step;
+    ++dyeStep;
+
+    // diffuse
+    // copy texture to result texture
+    gl.bindTexture(gl.TEXTURE_2D, dyeResultTexture);
+    gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.R32F, 0, 0, textureWidth, textureHeight, 0);
+
+    // diffuse algorithm
+    gl.useProgram(diffuseDyeProgram);
+
+    gl.bindVertexArray(diffuseDyeVertexArray);
+    gl.uniform2f(diffuseDyeLocations.textureDimensions, textureWidth, textureHeight);
+    bindTextureToLocation(gl, diffuseDyeLocations.dyeResult, 0, dyeResultTexture);
+    bindTextureToLocation(gl, diffuseDyeLocations.boundaryBoolean, 2, boundaryBooleanTexture);
+    bindTextureToLocation(gl, diffuseDyeLocations.boundaryNormal, 3, boundaryNormalTexture);
+    gl.uniform1f(diffuseDyeLocations.deltaTime, deltaTime);
+    gl.uniform1f(diffuseDyeLocations.dx, params.dx);
+
+    for (let i = 0; i < 20; ++i) {
+      bindTextureToLocation(gl, diffuseDyeLocations.dyeField, 1, dyeTextures[dyeStep % 2]);
+
+      setFramebuffer(gl, dyeFramebuffers[(dyeStep + 1) % 2], textureWidth, textureHeight);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      ++dyeStep;
+    }
   }
 
   let mouseIsPressed = false;
-  document.addEventListener('mousedown', () => {
+  document.addEventListener('mousedown', (event) => {
     mouseIsPressed = true;
-  })
+    mouseX = event.clientX;
+    mouseY = event.clientY;
+  });
   document.addEventListener('mousemove', (event) => {
-    if (mouseIsPressed && (event.movementX != 0 || event.movementY != 0)) {
-      applyForce = true;
+    if (mouseIsPressed) {
       mouseX = event.clientX;
       mouseY = event.clientY;
       movementX = event.movementX;
       movementY = event.movementY;
-      addForce(0.0167);
-      display(false, displayMode);
+      // if (!loop) {
+      //   addForce(0.0167);
+      //   display(false, displayMode);
+      // }
     }
   });
   document.addEventListener('mouseup', () => {
     mouseIsPressed = false;
-    applyForce = false;
+    movementX = 0;
+    movementY = 0;
   });
   
   let loop = false;
@@ -433,9 +568,12 @@ function main() {
       update(0.0167);
       display(false, displayMode);
     } else if (event.key == "m") {
-      displayMode = displayMode < 4 ? displayMode + 1 : 0;
-      console.log("displayMode:", ["velocity", "pressure", "divergence", "gradient", "boundaryNormal"][displayMode])
+      displayMode = displayMode < 3 ? displayMode + 1 : 0;
+      console.log("displayMode:", ["velocity", "pressure", "divergence", "dye"][displayMode])
       display(false, displayMode);
+    } else if (event.key == "s") {
+      gradientSubtractEnabled = !gradientSubtractEnabled;
+      console.log("gradient subtract", gradientSubtractEnabled ? "enabled" : "disabled");
     }
   });
 
@@ -461,8 +599,7 @@ function main() {
     bindTextureToLocation(gl, displayLocations.pressureField, 1, pressureTextures[0]);
     bindTextureToLocation(gl, displayLocations.boundaryBoolean, 2, boundaryBooleanTexture);
     bindTextureToLocation(gl, displayLocations.divergenceResult, 3, divergenceTexture);
-    bindTextureToLocation(gl, displayLocations.gradientField, 4, gradientTexture);
-    bindTextureToLocation(gl, displayLocations.boundaryNormal, 5, boundaryNormalTexture);
+    bindTextureToLocation(gl, displayLocations.dyeField, 4, dyeTextures[dyeStep % 2])
     gl.uniform2f(displayLocations.simulationDimensions, simulationWidth, simulationHeight);
     gl.uniform1i(displayLocations.mode, mode);
 

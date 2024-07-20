@@ -53,8 +53,8 @@ uniform vec2 dx; // simulation domain * dx = texture domain | texture domain * r
 out vec2 velocity;
 
 void main() {
-  vec2 v0 = texture(velocityField, position).xy; // velocity of fragment
-  vec2 samplePosition = position - v0 * deltaTime * dx;
+  vec2 v = texture(velocityField, position).xy; // velocity of fragment
+  vec2 samplePosition = position - v * deltaTime * dx;
 
   velocity = texture(velocityField, samplePosition).xy;
 }
@@ -99,6 +99,64 @@ void main() {
 }
 `;
 
+const FSAdvectDye = `#version 300 es
+precision highp float;
+
+in vec2 position; // coordinates in texCoords
+
+uniform sampler2D velocityField; // RG32F texture
+uniform sampler2D dyeField; // R32F texture
+uniform float deltaTime;
+uniform vec2 dx; // simulation domain * dx = texture domain | texture domain * rdx = simulation domain
+
+out float dye;
+
+void main() {
+  vec2 v = texture(velocityField, position).xy; // velocity of fragment
+  vec2 samplePosition = position - v * deltaTime * dx;
+
+  dye = texture(dyeField, samplePosition).x;
+}
+`;
+
+const FSDiffuseDye = `#version 300 es
+precision highp float;
+
+in vec2 position; // coordinates in texCoords
+in vec2 position_l; // coordinates of left pixel in texCoords
+in vec2 position_r; // coordinates of right pixel in texCoords
+in vec2 position_t; // coordinates of top pixel in texCoords
+in vec2 position_b; // coordinates of bottom pixel in texCoords
+
+uniform sampler2D dyeResult; // Solution matrix * field = result
+uniform sampler2D dyeField; // RG32F texture
+uniform sampler2D boundaryBoolean; // R8 texture
+uniform sampler2D boundaryNormal; // RG32F texture
+uniform float deltaTime;
+uniform vec2 dx; // simulation domain * dx = texture domain
+
+out float dye;
+
+void main() {
+  if (texture(boundaryBoolean, position).x == 1.0) {
+    vec2 normal = texture(boundaryNormal, position).xy;
+    dye = texture(dyeField, position + normal).x;
+    return;
+  }
+
+  float c = texture(dyeField, position).x;
+  float l = texture(dyeField, position_l).x;
+  float r = texture(dyeField, position_r).x;
+  float t = texture(dyeField, position_t).x;
+  float b = texture(dyeField, position_b).x;
+  float result = texture(dyeResult, position).x;
+
+  float alpha = c * c / deltaTime;
+  float rBeta = 1.0 / (4.0 + alpha);
+  dye = (l + r + t + b + alpha * result) * rBeta;
+}
+`;
+
 // called in a point primitive
 const FSApplyForce = `#version 300 es
 precision highp float;
@@ -110,7 +168,21 @@ uniform float splatRadius;
 out vec2 velocity; // output is blended
 
 void main() {
-  velocity = inputVelocity * deltaTime * max((1.0 - length(gl_PointCoord.xy - 0.5) * 2.0), 0.0);
+  velocity = inputVelocity * max((1.0 - length(gl_PointCoord.xy - 0.5) * 2.0), 0.0);
+  // velocity = inputVelocity * max((1.0 - length(gl_PointCoord.xy - 0.5) * 2.0), 0.0);
+}
+`;
+
+const FSAddDye = `#version 300 es
+precision highp float;
+
+uniform float inputDensity;
+uniform float splatRadius;
+
+out float dye; // output is blended
+
+void main() {
+  dye = inputDensity * max((1.0 - length(gl_PointCoord.xy - 0.5) * 2.0), 0.0);
 }
 `;
 
@@ -168,7 +240,7 @@ void main() {
 
   // float alpha = -(c * c);
   float alpha = 1.0;
-  float rBeta = 1.0 / 4.0001;
+  float rBeta = 1.0 / 4.000;
 
   float p;
 
@@ -219,8 +291,7 @@ uniform sampler2D velocityField;
 uniform sampler2D pressureField;
 uniform sampler2D boundaryBoolean;
 uniform sampler2D divergenceResult;
-uniform sampler2D gradientField;
-uniform sampler2D boundaryNormal;
+uniform sampler2D dyeField;
 uniform vec2 simulationDimensions;
 uniform int mode;
 
@@ -230,24 +301,20 @@ void main() {
   vec4 c = vec4(0, 0, 0.5, 1);
   switch(mode) {
     case 0:
-      vec2 v = texture(velocityField, position).xy * simulationDimensions / 5.0;
+      // vec2 v = texture(velocityField, position).xy / simulationDimensions * 5.0;
+      vec2 v = texture(velocityField, position).xy;
       c.xy = 1.0 / (1.0 + exp(-v));
       // c.xy = sqrt(abs(1.0 / (1.0 + exp(-v)))) * sign(v);
       break;
     case 1: 
       // c.xyz = vec3(abs(texture(pressureField, position).x)) * 100.0;
-      c.xyz = vec3(1.0 / (1.0 + exp(-texture(pressureField, position).x)));
+      c.xyz = vec3(1.0 / (1.0 + exp(-texture(pressureField, position).x * length(simulationDimensions))));
       break;
     case 2: 
-      c.xyz = vec3(1.0 / (1.0 + exp(-texture(divergenceResult, position).x)));
+      c.xyz = vec3(1.0 / (1.0 + exp(-texture(divergenceResult, position).x * length(simulationDimensions))));
       break;
     case 3:
-      vec2 g = texture(gradientField, position).xy;
-      c.xy = 1.0 / (1.0 + exp(-g));
-      break;
-    case 4:
-      vec2 n = texture(boundaryNormal, position).xy * 64.0;
-      c.xy = 1.0 / (1.0 + exp(-n));
+      c.xyz = vec3(1.0 / (1.0 + exp(-texture(dyeField, position).x)));
       break;
   }
   if (texture(boundaryBoolean, position).x == 1.0 && mode != 4) {
